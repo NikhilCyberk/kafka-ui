@@ -36,8 +36,31 @@ export const getTopicDetails = (topicName) => {
         });
 };
 
-export const createTopic = (topic) => api.post('/topics', topic).then(response => response.data);
-export const deleteTopic = (topicName) => api.delete(`/topics/${topicName}`).then(response => response.data);
+export const createTopic = (topic) => {
+    console.log('Creating topic:', topic);
+    return api.post('/topics', topic)
+        .then(response => {
+            console.log('Topic created successfully:', response.data);
+            return response.data;
+        })
+        .catch(error => {
+            console.error('Error creating topic:', error.response?.data || error.message);
+            throw error;
+        });
+};
+
+export const deleteTopic = (topicName) => {
+    console.log('Deleting topic:', topicName);
+    return api.delete(`/topics/${topicName}`)
+        .then(response => {
+            console.log('Topic deleted successfully:', response.data);
+            return response.data;
+        })
+        .catch(error => {
+            console.error('Error deleting topic:', error.response?.data || error.message);
+            throw error;
+        });
+};
 
 // Message endpoints
 export const getMessages = (topic, filters = {}) => {
