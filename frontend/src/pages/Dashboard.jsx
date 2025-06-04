@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
     Box,
-    SimpleGrid,
-    Stat,
-    StatLabel,
-    StatNumber,
-    StatHelpText,
-    Heading,
-    Text,
-    useToast,
-} from '@chakra-ui/react';
+    Grid,
+    Paper,
+    Typography,
+    CircularProgress,
+    Alert,
+    Snackbar
+} from '@mui/material';
 import { getTopics, getConsumerGroups } from '../services/api';
 
 function Dashboard() {
@@ -20,7 +18,7 @@ function Dashboard() {
         activeConsumers: 0,
     });
     const [loading, setLoading] = useState(true);
-    const toast = useToast();
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         fetchStats();
@@ -40,81 +38,88 @@ function Dashboard() {
                 activeConsumers: 0, // This would need to be implemented in the backend
             });
         } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to fetch dashboard stats',
-                status: 'error',
-                duration: 3000,
-                isClosable: true,
-            });
+            setError('Failed to fetch dashboard stats');
         } finally {
             setLoading(false);
         }
     };
 
     if (loading) {
-        return <Text>Loading...</Text>;
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                <CircularProgress />
+            </Box>
+        );
     }
+
+    const StatCard = ({ label, value, helpText }) => (
+        <Paper
+            elevation={1}
+            sx={{
+                p: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+            }}
+        >
+            <Typography color="text.secondary" gutterBottom>
+                {label}
+            </Typography>
+            <Typography variant="h4" component="div" gutterBottom>
+                {value}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+                {helpText}
+            </Typography>
+        </Paper>
+    );
 
     return (
         <Box>
-            <Heading size="lg" mb={6}>
+            <Typography variant="h4" gutterBottom>
                 Dashboard
-            </Heading>
+            </Typography>
 
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
-                <Stat
-                    px={4}
-                    py={5}
-                    bg="white"
-                    shadow="sm"
-                    rounded="md"
-                    borderWidth="1px"
-                >
-                    <StatLabel>Total Topics</StatLabel>
-                    <StatNumber>{stats.topics}</StatNumber>
-                    <StatHelpText>Active topics in the cluster</StatHelpText>
-                </Stat>
+            <Grid container spacing={3}>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        label="Total Topics"
+                        value={stats.topics}
+                        helpText="Active topics in the cluster"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        label="Consumer Groups"
+                        value={stats.consumerGroups}
+                        helpText="Active consumer groups"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        label="Total Messages"
+                        value={stats.totalMessages}
+                        helpText="Messages across all topics"
+                    />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        label="Active Consumers"
+                        value={stats.activeConsumers}
+                        helpText="Currently active consumers"
+                    />
+                </Grid>
+            </Grid>
 
-                <Stat
-                    px={4}
-                    py={5}
-                    bg="white"
-                    shadow="sm"
-                    rounded="md"
-                    borderWidth="1px"
-                >
-                    <StatLabel>Consumer Groups</StatLabel>
-                    <StatNumber>{stats.consumerGroups}</StatNumber>
-                    <StatHelpText>Active consumer groups</StatHelpText>
-                </Stat>
-
-                <Stat
-                    px={4}
-                    py={5}
-                    bg="white"
-                    shadow="sm"
-                    rounded="md"
-                    borderWidth="1px"
-                >
-                    <StatLabel>Total Messages</StatLabel>
-                    <StatNumber>{stats.totalMessages}</StatNumber>
-                    <StatHelpText>Messages across all topics</StatHelpText>
-                </Stat>
-
-                <Stat
-                    px={4}
-                    py={5}
-                    bg="white"
-                    shadow="sm"
-                    rounded="md"
-                    borderWidth="1px"
-                >
-                    <StatLabel>Active Consumers</StatLabel>
-                    <StatNumber>{stats.activeConsumers}</StatNumber>
-                    <StatHelpText>Currently active consumers</StatHelpText>
-                </Stat>
-            </SimpleGrid>
+            <Snackbar
+                open={!!error}
+                autoHideDuration={6000}
+                onClose={() => setError(null)}
+            >
+                <Alert severity="error" onClose={() => setError(null)}>
+                    {error}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }

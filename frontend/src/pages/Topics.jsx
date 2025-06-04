@@ -3,33 +3,31 @@ import {
     Box,
     Button,
     Table,
-    Thead,
-    Tbody,
-    Tr,
-    Th,
-    Td,
-    useDisclosure,
-    Modal,
-    ModalOverlay,
-    ModalContent,
-    ModalHeader,
-    ModalBody,
-    ModalCloseButton,
-    FormControl,
-    FormLabel,
-    Input,
-    NumberInput,
-    NumberInputField,
-    useToast,
-} from '@chakra-ui/react';
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Typography,
+    Alert,
+    Snackbar,
+    CircularProgress
+} from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getTopics, createTopic } from '../services/api';
 
 function Topics() {
     const [topics, setTopics] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { isOpen, onOpen, onClose } = useDisclosure();
-    const toast = useToast();
+    const [open, setOpen] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(null);
 
     const [newTopic, setNewTopic] = useState({
         name: '',
@@ -43,16 +41,20 @@ function Topics() {
 
     const fetchTopics = async () => {
         try {
+            setLoading(true);
             const data = await getTopics();
-            setTopics(data);
+            console.log('Fetched topics:', data); // Debug log
+            if (Array.isArray(data)) {
+                setTopics(data);
+            } else {
+                console.error('Topics data is not an array:', data);
+                setTopics([]);
+                setError('Invalid topics data received from server');
+            }
         } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to fetch topics',
-                status: 'error',
-                duration: 3000,
-                isClosable: true,
-            });
+            console.error('Error fetching topics:', error);
+            setError('Failed to fetch topics');
+            setTopics([]);
         } finally {
             setLoading(false);
         }
@@ -61,96 +63,123 @@ function Topics() {
     const handleCreateTopic = async () => {
         try {
             await createTopic(newTopic);
-            toast({
-                title: 'Success',
-                description: 'Topic created successfully',
-                status: 'success',
-                duration: 3000,
-                isClosable: true,
-            });
-            onClose();
+            setSuccess('Topic created successfully');
+            setOpen(false);
+            setNewTopic({ name: '', partitions: 1, replicas: 1 });
             fetchTopics();
         } catch (error) {
-            toast({
-                title: 'Error',
-                description: 'Failed to create topic',
-                status: 'error',
-                duration: 3000,
-                isClosable: true,
-            });
+            console.error('Error creating topic:', error);
+            setError('Failed to create topic');
         }
     };
 
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     return (
         <Box>
-            <Box mb={4} display="flex" justifyContent="space-between" alignItems="center">
-                <h1>Topics</h1>
-                <Button colorScheme="blue" onClick={onOpen}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h4">Topics</Typography>
+                <Button variant="contained" color="primary" onClick={() => setOpen(true)}>
                     Create Topic
                 </Button>
             </Box>
 
-            <Table variant="simple">
-                <Thead>
-                    <Tr>
-                        <Th>Name</Th>
-                        <Th>Partitions</Th>
-                        <Th>Replicas</Th>
-                    </Tr>
-                </Thead>
-                <Tbody>
-                    {topics.map((topic) => (
-                        <Tr key={topic}>
-                            <Td>
-                                <RouterLink to={`/topics/${topic}`}>{topic}</RouterLink>
-                            </Td>
-                            <Td>-</Td>
-                            <Td>-</Td>
-                        </Tr>
-                    ))}
-                </Tbody>
-            </Table>
+            <TableContainer component={Paper}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Name</TableCell>
+                            <TableCell>Partitions</TableCell>
+                            <TableCell>Replicas</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {topics && topics.length > 0 ? (
+                            topics.map((topic) => (
+                                <TableRow key={topic}>
+                                    <TableCell>
+                                        <RouterLink to={`/topics/${topic}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                            {topic}
+                                        </RouterLink>
+                                    </TableCell>
+                                    <TableCell>-</TableCell>
+                                    <TableCell>-</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={3} align="center">
+                                    No topics found
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </TableContainer>
 
-            <Modal isOpen={isOpen} onClose={onClose}>
-                <ModalOverlay />
-                <ModalContent>
-                    <ModalHeader>Create New Topic</ModalHeader>
-                    <ModalCloseButton />
-                    <ModalBody pb={6}>
-                        <FormControl>
-                            <FormLabel>Topic Name</FormLabel>
-                            <Input
-                                value={newTopic.name}
-                                onChange={(e) => setNewTopic({ ...newTopic, name: e.target.value })}
-                                placeholder="Enter topic name"
-                            />
-                        </FormControl>
+            <Dialog open={open} onClose={() => setOpen(false)}>
+                <DialogTitle>Create New Topic</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Topic Name"
+                        fullWidth
+                        value={newTopic.name}
+                        onChange={(e) => setNewTopic({ ...newTopic, name: e.target.value })}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Number of Partitions"
+                        type="number"
+                        fullWidth
+                        value={newTopic.partitions}
+                        onChange={(e) => setNewTopic({ ...newTopic, partitions: parseInt(e.target.value) })}
+                        inputProps={{ min: 1 }}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Replication Factor"
+                        type="number"
+                        fullWidth
+                        value={newTopic.replicas}
+                        onChange={(e) => setNewTopic({ ...newTopic, replicas: parseInt(e.target.value) })}
+                        inputProps={{ min: 1 }}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreateTopic} variant="contained" color="primary">
+                        Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-                        <FormControl mt={4}>
-                            <FormLabel>Number of Partitions</FormLabel>
-                            <NumberInput min={1} value={newTopic.partitions}>
-                                <NumberInputField
-                                    onChange={(e) => setNewTopic({ ...newTopic, partitions: parseInt(e.target.value) })}
-                                />
-                            </NumberInput>
-                        </FormControl>
+            <Snackbar
+                open={!!error}
+                autoHideDuration={6000}
+                onClose={() => setError(null)}
+            >
+                <Alert severity="error" onClose={() => setError(null)}>
+                    {error}
+                </Alert>
+            </Snackbar>
 
-                        <FormControl mt={4}>
-                            <FormLabel>Replication Factor</FormLabel>
-                            <NumberInput min={1} value={newTopic.replicas}>
-                                <NumberInputField
-                                    onChange={(e) => setNewTopic({ ...newTopic, replicas: parseInt(e.target.value) })}
-                                />
-                            </NumberInput>
-                        </FormControl>
-
-                        <Button colorScheme="blue" mr={3} mt={4} onClick={handleCreateTopic}>
-                            Create
-                        </Button>
-                        <Button onClick={onClose}>Cancel</Button>
-                    </ModalBody>
-                </ModalContent>
-            </Modal>
+            <Snackbar
+                open={!!success}
+                autoHideDuration={6000}
+                onClose={() => setSuccess(null)}
+            >
+                <Alert severity="success" onClose={() => setSuccess(null)}>
+                    {success}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 }

@@ -8,15 +8,16 @@ import (
 )
 
 type ConsumerGroupHandler struct {
-	client *kafka.KafkaClient
+	service *kafka.ConsumerGroupService
 }
 
-func NewConsumerGroupHandler(client *kafka.KafkaClient) *ConsumerGroupHandler {
-	return &ConsumerGroupHandler{client: client}
+func NewConsumerGroupHandler(service *kafka.ConsumerGroupService) *ConsumerGroupHandler {
+	return &ConsumerGroupHandler{service: service}
 }
 
-func (h *ConsumerGroupHandler) ListConsumerGroups(c *gin.Context) {
-	groups, err := h.client.ListConsumerGroups()
+// GetConsumerGroups handles GET /api/consumer-groups
+func (h *ConsumerGroupHandler) GetConsumerGroups(c *gin.Context) {
+	groups, err := h.service.GetConsumerGroups(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -25,9 +26,10 @@ func (h *ConsumerGroupHandler) ListConsumerGroups(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"consumer_groups": groups})
 }
 
+// GetConsumerGroupDetails handles GET /api/consumer-groups/:groupId
 func (h *ConsumerGroupHandler) GetConsumerGroupDetails(c *gin.Context) {
 	groupId := c.Param("groupId")
-	details, err := h.client.GetConsumerGroupDetails(groupId)
+	details, err := h.service.GetConsumerGroupDetails(c.Request.Context(), groupId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

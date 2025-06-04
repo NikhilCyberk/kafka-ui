@@ -8,26 +8,30 @@ import (
 )
 
 type TopicHandler struct {
-	client *kafka.KafkaClient
+	service *kafka.TopicService
 }
 
-func NewTopicHandler(client *kafka.KafkaClient) *TopicHandler {
-	return &TopicHandler{client: client}
+func NewTopicHandler(service *kafka.TopicService) *TopicHandler {
+	return &TopicHandler{
+		service: service,
+	}
 }
 
-func (h *TopicHandler) ListTopics(c *gin.Context) {
-	topics, err := h.client.ListTopics()
+// GetTopics handles GET requests to /api/topics
+func (h *TopicHandler) GetTopics(c *gin.Context) {
+	topics, err := h.service.GetTopics(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"topics": topics})
+	c.JSON(http.StatusOK, topics)
 }
 
+// GetTopicDetails handles GET requests to /api/topics/:name
 func (h *TopicHandler) GetTopicDetails(c *gin.Context) {
-	topicName := c.Param("name")
-	details, err := h.client.GetTopicDetails(topicName)
+	name := c.Param("name")
+	details, err := h.service.GetTopicDetails(c.Request.Context(), name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -36,20 +40,20 @@ func (h *TopicHandler) GetTopicDetails(c *gin.Context) {
 	c.JSON(http.StatusOK, details)
 }
 
-type CreateTopicRequest struct {
-	Name       string `json:"name" binding:"required"`
-	Partitions int    `json:"partitions" binding:"required,min=1"`
-	Replicas   int    `json:"replicas" binding:"required,min=1"`
-}
-
+// CreateTopic handles POST requests to /api/topics
 func (h *TopicHandler) CreateTopic(c *gin.Context) {
-	var req CreateTopicRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request struct {
+		Name       string `json:"name" binding:"required"`
+		Partitions int    `json:"partitions" binding:"required"`
+		Replicas   int    `json:"replicas" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := h.client.CreateTopic(req.Name, req.Partitions, req.Replicas)
+	err := h.service.CreateTopic(c.Request.Context(), request.Name, request.Partitions, request.Replicas)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -58,9 +62,10 @@ func (h *TopicHandler) CreateTopic(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "Topic created successfully"})
 }
 
+// DeleteTopic handles DELETE requests to /api/topics/:name
 func (h *TopicHandler) DeleteTopic(c *gin.Context) {
-	topicName := c.Param("name")
-	err := h.client.DeleteTopic(topicName)
+	name := c.Param("name")
+	err := h.service.DeleteTopic(c.Request.Context(), name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
