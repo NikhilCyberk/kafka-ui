@@ -10,17 +10,32 @@ const api = axios.create({
 });
 
 // Topic endpoints
-export const getTopics = () => api.get('/topics').then(response => response.data);
-export const getTopicDetails = (topicName) => 
-    api.get(`/topics/${topicName}`)
+export const getTopics = () => {
+    console.log('API: Fetching topics...');
+    return api.get('/topics')
         .then(response => {
-            console.log('Topic details response:', response.data); // Debug log
+            console.log('API: Topics response:', response.data);
             return response.data;
         })
         .catch(error => {
-            console.error('Error in getTopicDetails:', error); // Debug log
+            console.error('API: Error fetching topics:', error);
             throw error;
         });
+};
+
+export const getTopicDetails = (topicName) => {
+    console.log('API: Fetching topic details for:', topicName);
+    return api.get(`/topics/${topicName}`)
+        .then(response => {
+            console.log('API: Topic details response:', response.data);
+            return response.data;
+        })
+        .catch(error => {
+            console.error('API: Error fetching topic details:', error);
+            throw error;
+        });
+};
+
 export const createTopic = (topic) => api.post('/topics', topic).then(response => response.data);
 export const deleteTopic = (topicName) => api.delete(`/topics/${topicName}`).then(response => response.data);
 
@@ -64,7 +79,19 @@ export const searchMessages = (topic, searchParams) =>
     api.post(`/messages/${topic}/search`, searchParams).then(response => response.data);
 
 // Consumer group endpoints
-export const getConsumerGroups = () => api.get('/consumer-groups').then(response => response.data.consumer_groups);
+export const getConsumerGroups = () => {
+    console.log('API: Fetching consumer groups...');
+    return api.get('/consumer-groups')
+        .then(response => {
+            console.log('API: Consumer groups response:', response.data);
+            return response.data.consumer_groups || [];
+        })
+        .catch(error => {
+            console.error('API: Error fetching consumer groups:', error);
+            throw error;
+        });
+};
+
 export const getConsumerGroupDetails = (groupId) => api.get(`/consumer-groups/${groupId}`).then(response => response.data);
 
 // Metrics endpoints
