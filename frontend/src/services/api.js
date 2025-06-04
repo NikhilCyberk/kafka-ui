@@ -60,7 +60,21 @@ export const getMessages = (topic, filters = {}) => {
 };
 
 export const produceMessage = (topic, message) => {
-    return api.post(`/messages/${topic}`, message).then(response => response.data);
+    console.log('Producing message:', { topic, message });
+    // Ensure message has required fields
+    const messageToSend = {
+        ...message,
+        format: message.format || 'json'
+    };
+    return api.post(`/messages/${topic}`, messageToSend)
+        .then(response => {
+            console.log('Message produced successfully:', response.data);
+            return response.data;
+        })
+        .catch(error => {
+            console.error('Error producing message:', error.response?.data || error.message);
+            throw error;
+        });
 };
 
 export const replayMessages = (topic, startOffset, endOffset) => {

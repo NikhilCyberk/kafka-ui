@@ -14,6 +14,7 @@ type MessageFormat string
 
 const (
 	FormatJSON    MessageFormat = "json"
+	FormatString  MessageFormat = "string"
 	FormatAvro    MessageFormat = "avro"
 	FormatProtobuf MessageFormat = "protobuf"
 )
@@ -52,6 +53,15 @@ type MessageSearch struct {
 func NewMessageService(client *KafkaClient) *MessageService {
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_0_0_0
+	
+	// Configure producer settings
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	
+	// Configure consumer settings
+	config.Consumer.Return.Errors = true
+	
 	return &MessageService{
 		client: client,
 		config: config,
@@ -331,16 +341,16 @@ func (s *MessageService) parseMessage(msg *sarama.ConsumerMessage) (Message, err
 	}, nil
 }
 
-// parseMessageValue attempts to parse the message value based on its format
+// parseMessageValue parses the message value based on its format
 func (s *MessageService) parseMessageValue(value []byte) (interface{}, MessageFormat, error) {
-	// Try parsing as JSON first
+	// Try to parse as JSON first
 	var jsonValue interface{}
 	if err := json.Unmarshal(value, &jsonValue); err == nil {
 		return jsonValue, FormatJSON, nil
 	}
 
 	// If not JSON, return as string
-	return string(value), FormatJSON, nil
+	return string(value), FormatString, nil
 }
 
 func (s *MessageService) validateJSON(value interface{}) error {

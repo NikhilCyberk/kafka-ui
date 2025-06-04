@@ -59,6 +59,7 @@ function TopicDetails() {
     const [newMessage, setNewMessage] = useState({
         key: '',
         value: '',
+        format: 'json',
         headers: {}
     });
 
@@ -103,10 +104,15 @@ function TopicDetails() {
     const handleProduceMessage = async () => {
         try {
             setError(null);
-            await produceMessage(topicName, newMessage);
+            // Ensure the message has the required format
+            const messageToSend = {
+                ...newMessage,
+                format: newMessage.format || 'json'
+            };
+            await produceMessage(topicName, messageToSend);
             setSuccess('Message produced successfully');
             setOpen(false);
-            setNewMessage({ key: '', value: '', headers: {} });
+            setNewMessage({ key: '', value: '', format: 'json', headers: {} });
             
             // Refresh messages after producing
             const messagesData = await getMessages(topicName, filters);
@@ -374,29 +380,41 @@ function TopicDetails() {
             <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>Produce Message</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{ pt: 2 }}>
                         <TextField
                             fullWidth
                             label="Key"
-                                value={newMessage.key}
-                                onChange={(e) => setNewMessage({ ...newMessage, key: e.target.value })}
+                            value={newMessage.key}
+                            onChange={(e) => setNewMessage(prev => ({ ...prev, key: e.target.value }))}
                             sx={{ mb: 2 }}
                         />
                         <TextField
                             fullWidth
                             label="Value"
+                            value={newMessage.value}
+                            onChange={(e) => setNewMessage(prev => ({ ...prev, value: e.target.value }))}
                             multiline
                             rows={4}
-                                value={newMessage.value}
-                                onChange={(e) => setNewMessage({ ...newMessage, value: e.target.value })}
+                            sx={{ mb: 2 }}
                         />
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                            <InputLabel>Format</InputLabel>
+                            <Select
+                                value={newMessage.format}
+                                label="Format"
+                                onChange={(e) => setNewMessage(prev => ({ ...prev, format: e.target.value }))}
+                            >
+                                <MenuItem value="json">JSON</MenuItem>
+                                <MenuItem value="string">String</MenuItem>
+                            </Select>
+                        </FormControl>
                     </Box>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
                     <Button onClick={handleProduceMessage} variant="contained" color="primary">
-                            Produce
-                        </Button>
+                        Produce
+                    </Button>
                 </DialogActions>
             </Dialog>
 

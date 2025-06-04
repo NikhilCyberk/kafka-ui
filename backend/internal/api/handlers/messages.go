@@ -129,19 +129,30 @@ func (h *MessageHandler) ProduceMessage(c *gin.Context) {
 
 	var message kafka.Message
 	if err := c.ShouldBindJSON(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		fmt.Printf("Error binding JSON: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid message format: %v", err)})
 		return
 	}
 
-	// Validate message
-	if err := h.service.ValidateMessage(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Set default format if not provided
+	if message.Format == "" {
+		message.Format = kafka.FormatJSON
+	}
+
+	// Validate message format
+	switch message.Format {
+	case kafka.FormatJSON, kafka.FormatString:
+		// Valid formats
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported message format: %s", message.Format)})
 		return
 	}
 
+	fmt.Printf("Creating producer for topic: %s\n", topic)
 	// Create a producer
 	producer, err := sarama.NewSyncProducer(h.service.GetBrokers(), h.service.GetConfig())
 	if err != nil {
+		fmt.Printf("Failed to create producer: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create producer: %v", err)})
 		return
 	}
@@ -153,14 +164,18 @@ func (h *MessageHandler) ProduceMessage(c *gin.Context) {
 	case kafka.FormatJSON:
 		valueBytes, err = json.Marshal(message.Value)
 		if err != nil {
+			fmt.Printf("Failed to marshal JSON: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to marshal JSON: %v", err)})
 			return
 		}
-	default:
-		// For non-JSON formats, convert to string
+	case kafka.FormatString:
 		valueBytes = []byte(fmt.Sprintf("%v", message.Value))
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported message format: %s", message.Format)})
+		return
 	}
 
+	fmt.Printf("Producing message to topic %s: key=%s, value=%s\n", topic, message.Key, string(valueBytes))
 	// Produce the message
 	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
@@ -168,10 +183,12 @@ func (h *MessageHandler) ProduceMessage(c *gin.Context) {
 		Value: sarama.ByteEncoder(valueBytes),
 	})
 	if err != nil {
+		fmt.Printf("Failed to produce message: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to produce message: %v", err)})
 		return
 	}
 
+	fmt.Printf("Message produced successfully to topic %s\n", topic)
 	c.JSON(http.StatusOK, gin.H{"message": "Message produced successfully"})
 }
 
