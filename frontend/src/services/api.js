@@ -11,20 +11,37 @@ const api = axios.create({
 
 // Topic endpoints
 export const getTopics = () => api.get('/topics').then(response => response.data);
-export const getTopicDetails = (topicName) => api.get(`/topics/${topicName}`).then(response => response.data);
+export const getTopicDetails = (topicName) => 
+    api.get(`/topics/${topicName}`)
+        .then(response => {
+            console.log('Topic details response:', response.data); // Debug log
+            return response.data;
+        })
+        .catch(error => {
+            console.error('Error in getTopicDetails:', error); // Debug log
+            throw error;
+        });
 export const createTopic = (topic) => api.post('/topics', topic).then(response => response.data);
 export const deleteTopic = (topicName) => api.delete(`/topics/${topicName}`).then(response => response.data);
 
 // Message endpoints
 export const getMessages = (topic, filters = {}) => {
-    const params = new URLSearchParams();
-    if (filters.key) params.append('key', filters.key);
-    if (filters.value) params.append('value', filters.value);
-    if (filters.startTime) params.append('start_time', filters.startTime.toISOString());
-    if (filters.endTime) params.append('end_time', filters.endTime.toISOString());
-    if (filters.format) params.append('format', filters.format);
-    
-    return api.get(`/messages/${topic}?${params.toString()}`).then(response => response.data.messages);
+    console.log('Fetching messages for topic:', topic, 'with filters:', filters);
+    const queryParams = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value);
+    });
+    const url = `/messages/${topic}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    console.log('Messages API URL:', url);
+    return api.get(url)
+        .then(response => {
+            console.log('Messages response:', response.data);
+            return Array.isArray(response.data) ? response.data : [];
+        })
+        .catch(error => {
+            console.error('Error fetching messages:', error);
+            return [];
+        });
 };
 
 export const produceMessage = (topic, message) => {
@@ -42,6 +59,9 @@ export const replayMessages = (topic, startOffset, endOffset) => {
 export const validateMessage = (message) => {
     return api.post('/messages/validate', message).then(response => response.data);
 };
+
+export const searchMessages = (topic, searchParams) => 
+    api.post(`/messages/${topic}/search`, searchParams).then(response => response.data);
 
 // Consumer group endpoints
 export const getConsumerGroups = () => api.get('/consumer-groups').then(response => response.data.consumer_groups);
