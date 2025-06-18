@@ -1,26 +1,29 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
+    Paper,
+    Grid,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
-    Alert,
-    Snackbar,
     CircularProgress,
-    Grid,
+    Alert,
     Card,
     CardContent,
+    Divider,
     List,
     ListItem,
     ListItemText,
-    Divider
+    IconButton,
+    Tooltip
 } from '@mui/material';
-import { getConsumerGroups, getConsumerGroupDetails } from '../services/api';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { getConsumerGroups } from '../services/api';
+import ConsumerLagMonitor from '../components/monitoring/ConsumerLagMonitor';
 
 function ConsumerGroups() {
     const [consumerGroups, setConsumerGroups] = useState([]);
@@ -34,25 +37,23 @@ function ConsumerGroups() {
 
     const fetchConsumerGroups = async () => {
         try {
+            setLoading(true);
+            setError(null);
             const data = await getConsumerGroups();
             setConsumerGroups(data);
         } catch (error) {
-            setError('Failed to fetch consumer groups');
+            console.error('Error fetching consumer groups:', error);
+            setError(error.response?.data?.error || 'Failed to fetch consumer groups');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleGroupClick = async (groupId) => {
-        try {
-            const details = await getConsumerGroupDetails(groupId);
-            setSelectedGroup(details);
-        } catch (error) {
-            setError('Failed to fetch consumer group details');
-        }
+    const handleGroupClick = (groupId) => {
+        setSelectedGroup(groupId);
     };
 
-    if (loading) {
+    if (loading && !consumerGroups.length) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
                 <CircularProgress />
@@ -61,85 +62,76 @@ function ConsumerGroups() {
     }
 
     return (
-        <Box>
-            <Typography variant="h4" gutterBottom>
-                Consumer Groups
-            </Typography>
+        <Box p={3}>
+            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h4">Consumer Groups</Typography>
+                <Tooltip title="Refresh">
+                    <IconButton onClick={fetchConsumerGroups} color="primary">
+                        <RefreshIcon />
+                    </IconButton>
+                </Tooltip>
+            </Box>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
 
             <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                    <TableContainer component={Paper}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Group ID</TableCell>
-                                    <TableCell>Members</TableCell>
-                                    <TableCell>Lag</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {consumerGroups.map((groupId) => (
-                                    <TableRow
-                                        key={groupId}
-                                        onClick={() => handleGroupClick(groupId)}
-                                        sx={{
-                                            cursor: 'pointer',
-                                            '&:hover': { backgroundColor: 'action.hover' }
-                                        }}
-                                    >
-                                        <TableCell>{groupId}</TableCell>
-                                        <TableCell>-</TableCell>
-                                        <TableCell>-</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                {/* Consumer Groups List */}
+                <Grid item xs={12} md={4}>
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                Groups
+                            </Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <TableContainer>
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Group ID</TableCell>
+                                            <TableCell>Members</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {consumerGroups.map((group) => (
+                                            <TableRow
+                                                key={group.group_id}
+                                                onClick={() => handleGroupClick(group.group_id)}
+                                                sx={{
+                                                    cursor: 'pointer',
+                                                    backgroundColor: selectedGroup === group.group_id ? 'action.selected' : 'inherit',
+                                                    '&:hover': { backgroundColor: 'action.hover' }
+                                                }}
+                                            >
+                                                <TableCell>{group.group_id}</TableCell>
+                                                <TableCell>{group.members || 0}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </CardContent>
+                    </Card>
                 </Grid>
 
-                {selectedGroup && (
-                    <Grid item xs={12} md={6}>
+                {/* Selected Group Details */}
+                <Grid item xs={12} md={8}>
+                    {selectedGroup ? (
+                        <ConsumerLagMonitor groupId={selectedGroup} />
+                    ) : (
                         <Card>
                             <CardContent>
-                                <Typography variant="h6" gutterBottom>
-                                    {selectedGroup.group_id}
-                                </Typography>
-                                <Divider sx={{ my: 2 }} />
-                                
-                                <Typography variant="subtitle1" gutterBottom>
-                                    Topics:
-                                </Typography>
-                                <List dense>
-                                    {selectedGroup.topics.map((topic) => (
-                                        <ListItem key={topic}>
-                                            <ListItemText primary={topic} />
-                                        </ListItem>
-                                    ))}
-                                </List>
-                                
-                                <Divider sx={{ my: 2 }} />
-                                
-                                <Typography variant="body2" color="text.secondary">
-                                    Members: {selectedGroup.members}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Lag: {selectedGroup.lag}
+                                <Typography variant="h6" color="text.secondary" align="center">
+                                    Select a consumer group to view details
                                 </Typography>
                             </CardContent>
                         </Card>
-                    </Grid>
-                )}
+                    )}
+                </Grid>
             </Grid>
-
-            <Snackbar
-                open={!!error}
-                autoHideDuration={6000}
-                onClose={() => setError(null)}
-            >
-                <Alert severity="error" onClose={() => setError(null)}>
-                    {error}
-                </Alert>
-            </Snackbar>
         </Box>
     );
 }

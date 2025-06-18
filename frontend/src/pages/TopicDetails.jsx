@@ -384,17 +384,17 @@ function TopicDetails() {
                         <TextField
                             fullWidth
                             label="Key"
-                            value={newMessage.key}
+                                value={newMessage.key}
                             onChange={(e) => setNewMessage(prev => ({ ...prev, key: e.target.value }))}
                             sx={{ mb: 2 }}
                         />
                         <TextField
                             fullWidth
                             label="Value"
-                            value={newMessage.value}
+                                value={newMessage.value}
                             onChange={(e) => setNewMessage(prev => ({ ...prev, value: e.target.value }))}
                             multiline
-                            rows={4}
+                                rows={4}
                             sx={{ mb: 2 }}
                         />
                         <FormControl fullWidth sx={{ mb: 2 }}>
@@ -413,8 +413,8 @@ function TopicDetails() {
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
                     <Button onClick={handleProduceMessage} variant="contained" color="primary">
-                        Produce
-                    </Button>
+                            Produce
+                        </Button>
                 </DialogActions>
             </Dialog>
 

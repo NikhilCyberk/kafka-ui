@@ -11,7 +11,7 @@ const StyledLink = styled(Button)(({ theme }) => ({
 }));
 
 function Navbar() {
-  return (
+    return (
     <AppBar position="static" color="default" elevation={1}>
       <Toolbar>
         <Typography variant="h6" color="primary" sx={{ flexGrow: 0, mr: 4 }}>
@@ -19,13 +19,13 @@ function Navbar() {
         </Typography>
         <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
           <StyledLink component={RouterLink} to="/">
-            Dashboard
+                        Dashboard
           </StyledLink>
           <StyledLink component={RouterLink} to="/topics">
-            Topics
+                        Topics
           </StyledLink>
           <StyledLink component={RouterLink} to="/consumer-groups">
-            Consumer Groups
+                        Consumer Groups
           </StyledLink>
           <StyledLink 
             component={RouterLink} 
@@ -37,7 +37,7 @@ function Navbar() {
         </Box>
       </Toolbar>
     </AppBar>
-  );
+    );
 }
 
 export default Navbar; 

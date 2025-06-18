@@ -28,7 +28,7 @@ export const getTopicDetails = (topicName) => {
     return api.get(`/topics/${topicName}`)
         .then(response => {
             console.log('API: Topic details response:', response.data);
-            return response.data;
+    return response.data;
         })
         .catch(error => {
             console.error('API: Error fetching topic details:', error);
@@ -41,7 +41,7 @@ export const createTopic = (topic) => {
     return api.post('/topics', topic)
         .then(response => {
             console.log('Topic created successfully:', response.data);
-            return response.data;
+    return response.data;
         })
         .catch(error => {
             console.error('Error creating topic:', error.response?.data || error.message);
@@ -54,7 +54,7 @@ export const deleteTopic = (topicName) => {
     return api.delete(`/topics/${topicName}`)
         .then(response => {
             console.log('Topic deleted successfully:', response.data);
-            return response.data;
+    return response.data;
         })
         .catch(error => {
             console.error('Error deleting topic:', error.response?.data || error.message);
@@ -92,7 +92,7 @@ export const produceMessage = (topic, message) => {
     return api.post(`/messages/${topic}`, messageToSend)
         .then(response => {
             console.log('Message produced successfully:', response.data);
-            return response.data;
+    return response.data;
         })
         .catch(error => {
             console.error('Error producing message:', error.response?.data || error.message);
