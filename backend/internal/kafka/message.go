@@ -2,369 +2,282 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/segmentio/kafka-go"
 )
 
-type MessageFormat string
-
-const (
-	FormatJSON    MessageFormat = "json"
-	FormatString  MessageFormat = "string"
-	FormatAvro    MessageFormat = "avro"
-	FormatProtobuf MessageFormat = "protobuf"
-)
-
-type MessageFilter struct {
-	Key       string      `json:"key,omitempty"`
-	Value     string      `json:"value,omitempty"`
-	StartTime *time.Time  `json:"start_time,omitempty"`
-	EndTime   *time.Time  `json:"end_time,omitempty"`
-	Format    MessageFormat `json:"format,omitempty"`
-}
-
-type Message struct {
-	Topic     string          `json:"topic"`
-	Partition int32          `json:"partition"`
-	Offset    int64          `json:"offset"`
-	Key       string         `json:"key"`
-	Value     interface{}    `json:"value"`
-	Timestamp time.Time      `json:"timestamp"`
-	Format    MessageFormat  `json:"format"`
+// APIMessage defines the structure of a message for the API response.
+type APIMessage struct {
+	Partition int       `json:"partition"`
+	Offset    int64     `json:"offset"`
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	Size      int       `json:"size"`
+	Time      time.Time `json:"time"`
 }
 
 type MessageService struct {
-	client *KafkaClient
-	config *sarama.Config
+	kafkaService *Service
 }
 
-// MessageSearch represents search criteria for messages
-type MessageSearch struct {
-	Query     string    `json:"query"`
-	StartTime *time.Time `json:"start_time,omitempty"`
-	EndTime   *time.Time `json:"end_time,omitempty"`
-	Format    MessageFormat `json:"format,omitempty"`
-}
-
-func NewMessageService(client *KafkaClient) *MessageService {
-	config := sarama.NewConfig()
-	config.Version = sarama.V2_0_0_0
-	
-	// Configure producer settings
-	config.Producer.Return.Successes = true
-	config.Producer.Return.Errors = true
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	
-	// Configure consumer settings
-	config.Consumer.Return.Errors = true
-	
+func NewMessageService(kafkaService *Service) *MessageService {
 	return &MessageService{
-		client: client,
-		config: config,
+		kafkaService: kafkaService,
 	}
 }
 
-// GetBrokers returns the list of Kafka brokers
-func (s *MessageService) GetBrokers() []string {
-	return s.client.Brokers
-}
-
-// GetConfig returns the Sarama configuration
-func (s *MessageService) GetConfig() *sarama.Config {
-	return s.config
-}
-
-// GetMessages retrieves messages from a topic with filtering capabilities
-func (s *MessageService) GetMessages(ctx context.Context, topic string, filter *MessageFilter) ([]Message, error) {
-	fmt.Printf("Creating consumer for topic: %s\n", topic)
-	// Create a consumer
-	consumer, err := sarama.NewConsumer(s.client.Brokers, s.config)
+// GetMessages - Optimized version that doesn't wait unnecessarily
+func (s *MessageService) GetMessages(ctx context.Context, clusterName, topic string, limit int) ([]APIMessage, error) {
+	brokers, err := s.kafkaService.GetBrokers(clusterName)
 	if err != nil {
-		fmt.Printf("Failed to create consumer: %v\n", err)
-		return nil, fmt.Errorf("failed to create consumer: %v", err)
+		return nil, fmt.Errorf("could not get brokers for cluster %s: %w", clusterName, err)
 	}
-	defer consumer.Close()
 
-	fmt.Printf("Getting partitions for topic: %s\n", topic)
-	// Get topic partitions
-	partitions, err := consumer.Partitions(topic)
+	client, err := sarama.NewClient(brokers, nil)
 	if err != nil {
-		fmt.Printf("Failed to get partitions: %v\n", err)
-		return nil, fmt.Errorf("failed to get partitions: %v", err)
+		return nil, fmt.Errorf("could not create client for cluster %s: %w", clusterName, err)
 	}
-	fmt.Printf("Found %d partitions\n", len(partitions))
+	defer client.Close()
 
-	messages := make([]Message, 0)
-	maxMessages := 100
+	partitions, err := client.Partitions(topic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get partitions for topic %s: %w", topic, err)
+	}
 
-	// Create a timeout context
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Check total messages available
+	partitionInfo := make(map[int32]struct{ oldest, newest int64 })
+	totalMessages := int64(0)
+
+	for _, partition := range partitions {
+		oldest, err := client.GetOffset(topic, partition, sarama.OffsetOldest)
+		if err != nil {
+			continue
+		}
+		newest, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
+		if err != nil {
+			continue
+		}
+
+		partitionInfo[partition] = struct{ oldest, newest int64 }{oldest, newest}
+		totalMessages += (newest - oldest)
+	}
+
+	if totalMessages == 0 {
+		return []APIMessage{}, nil
+	}
+
+	// Much shorter timeout since we know exactly how many messages to read
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	// Read from each partition
+	var allMessages []APIMessage
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, partition := range partitions {
-		fmt.Printf("Creating partition consumer for partition %d\n", partition)
-		// Create partition consumer with OffsetOldest
-		pc, err := consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
-		if err != nil {
-			fmt.Printf("Failed to create partition consumer: %v\n", err)
-			return nil, fmt.Errorf("failed to create partition consumer: %v", err)
-		}
-		defer pc.Close()
+		wg.Add(1)
+		go func(partitionID int32) {
+			defer wg.Done()
 
-		fmt.Printf("Reading messages from partition %d\n", partition)
-		// Read messages
-		for i := 0; i < maxMessages; i++ {
-			select {
-			case <-timeoutCtx.Done():
-				fmt.Printf("Timeout reached while reading messages\n")
-				return messages, nil
-			case msg, ok := <-pc.Messages():
-				if !ok {
-					fmt.Printf("Partition consumer closed for partition %d\n", partition)
-					break
-				}
-
-				fmt.Printf("Received message from partition %d, offset %d\n", partition, msg.Offset)
-
-				// Apply filters
-				if filter != nil {
-					if !s.matchesFilter(msg, filter) {
-						fmt.Printf("Message filtered out\n")
-						continue
-					}
-				}
-
-				// Parse message
-				message, err := s.parseMessage(msg)
-				if err != nil {
-					fmt.Printf("Failed to parse message: %v\n", err)
-					continue // Skip messages that can't be parsed
-				}
-
-				messages = append(messages, message)
-				fmt.Printf("Added message to result set, total messages: %d\n", len(messages))
-
-				// Check if we've reached the end time
-				if filter != nil && filter.EndTime != nil && msg.Timestamp.After(*filter.EndTime) {
-					fmt.Printf("Reached end time filter\n")
-					return messages, nil
-				}
+			info, exists := partitionInfo[partitionID]
+			if !exists || info.newest <= info.oldest {
+				return
 			}
+
+			// Read all messages from this partition efficiently
+			messages := s.readPartitionMessages(ctx, brokers, topic, partitionID, info.oldest, info.newest)
+
+			mu.Lock()
+			allMessages = append(allMessages, messages...)
+			mu.Unlock()
+		}(partition)
+	}
+
+	wg.Wait()
+
+	// Sort by time descending (newest first)
+	sort.Slice(allMessages, func(i, j int) bool {
+		return allMessages[i].Time.After(allMessages[j].Time)
+	})
+
+	// Apply limit
+	if len(allMessages) > limit {
+		allMessages = allMessages[:limit]
+	}
+
+	return allMessages, nil
+}
+
+// readPartitionMessages reads all messages from a partition efficiently
+func (s *MessageService) readPartitionMessages(ctx context.Context, brokers []string, topic string, partitionID int32, oldest, newest int64) []APIMessage {
+	var messages []APIMessage
+
+	if newest <= oldest {
+		return messages
+	}
+
+	// Create reader with correct configuration
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:   brokers,
+		Topic:     topic,
+		Partition: int(partitionID),
+		MaxBytes:  1e6, // 1MB max
+		MinBytes:  1,   // Don't wait for batches
+	})
+	defer r.Close()
+
+	// Set starting offset
+	if err := r.SetOffset(oldest); err != nil {
+		return messages
+	}
+
+	expectedMessages := int(newest - oldest)
+	messages = make([]APIMessage, 0, expectedMessages) // Pre-allocate slice
+
+	// Read exactly the number of messages we expect
+	for len(messages) < expectedMessages {
+		select {
+		case <-ctx.Done():
+			return messages
+		default:
+		}
+
+		// Set a very short timeout for each read operation
+		readCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		m, err := r.ReadMessage(readCtx)
+		cancel()
+
+		if err != nil {
+			// If we can't read more messages, break (probably reached end)
+			break
+		}
+
+		messages = append(messages, APIMessage{
+			Partition: m.Partition,
+			Offset:    m.Offset,
+			Key:       string(m.Key),
+			Value:     string(m.Value),
+			Size:      len(m.Value),
+			Time:      m.Time,
+		})
+
+		// Safety check - if we've read past what we expected, break
+		if m.Offset >= newest-1 {
+			break
 		}
 	}
 
-	fmt.Printf("Finished reading messages, total count: %d\n", len(messages))
-	return messages, nil
+	return messages
 }
 
-// ReplayMessages replays messages from a specific offset
-func (s *MessageService) ReplayMessages(ctx context.Context, topic string, startOffset int64, endOffset int64) error {
-	// Create a producer
-	producer, err := sarama.NewSyncProducer(s.client.Brokers, s.config)
+// GetLatestMessages - Alternative method for even faster latest message retrieval
+func (s *MessageService) GetLatestMessages(ctx context.Context, clusterName, topic string, limit int) ([]APIMessage, error) {
+	brokers, err := s.kafkaService.GetBrokers(clusterName)
 	if err != nil {
-		return fmt.Errorf("failed to create producer: %v", err)
+		return nil, fmt.Errorf("could not get brokers for cluster %s: %w", clusterName, err)
+	}
+
+	client, err := sarama.NewClient(brokers, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not create client for cluster %s: %w", clusterName, err)
+	}
+	defer client.Close()
+
+	partitions, err := client.Partitions(topic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get partitions for topic %s: %w", topic, err)
+	}
+
+	// Very short timeout for latest messages
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	var allMessages []APIMessage
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	messagesPerPartition := limit/len(partitions) + 1
+
+	for _, partition := range partitions {
+		wg.Add(1)
+		go func(partitionID int32) {
+			defer wg.Done()
+
+			oldest, err := client.GetOffset(topic, partitionID, sarama.OffsetOldest)
+			if err != nil {
+				return
+			}
+			newest, err := client.GetOffset(topic, partitionID, sarama.OffsetNewest)
+			if err != nil {
+				return
+			}
+
+			if newest <= oldest {
+				return
+			}
+
+			// Calculate start offset for latest N messages
+			startOffset := newest - int64(messagesPerPartition)
+			if startOffset < oldest {
+				startOffset = oldest
+			}
+
+			messages := s.readPartitionMessages(ctx, brokers, topic, partitionID, startOffset, newest)
+
+			mu.Lock()
+			allMessages = append(allMessages, messages...)
+			mu.Unlock()
+		}(partition)
+	}
+
+	wg.Wait()
+
+	// Sort by time descending
+	sort.Slice(allMessages, func(i, j int) bool {
+		return allMessages[i].Time.After(allMessages[j].Time)
+	})
+
+	if len(allMessages) > limit {
+		allMessages = allMessages[:limit]
+	}
+
+	return allMessages, nil
+}
+
+// ProduceMessage sends a message to a topic in a specific cluster, optionally to a specific partition.
+// If partition is -1, one will be chosen automatically.
+func (s *MessageService) ProduceMessage(ctx context.Context, clusterName, topic string, key, value []byte, partition int32) error {
+	brokers, err := s.kafkaService.GetBrokers(clusterName)
+	if err != nil {
+		return fmt.Errorf("could not get brokers for cluster %s: %w", clusterName, err)
+	}
+
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	// When a specific partition is set on the message, the producer will use it.
+	// When Partition is set to -1, it will use the default partitioner (e.g., round-robin).
+	// We do not need to set a manual partitioner.
+
+	producer, err := sarama.NewSyncProducer(brokers, config)
+	if err != nil {
+		return fmt.Errorf("could not create sync producer: %w", err)
 	}
 	defer producer.Close()
 
-	// Create a consumer
-	consumer, err := sarama.NewConsumer(s.client.Brokers, s.config)
-	if err != nil {
-		return fmt.Errorf("failed to create consumer: %v", err)
-	}
-	defer consumer.Close()
-
-	// Get partition
-	partition, err := consumer.ConsumePartition(topic, 0, startOffset)
-	if err != nil {
-		return fmt.Errorf("failed to consume partition: %v", err)
-	}
-	defer partition.Close()
-
-	// Read and replay messages
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			msg, ok := <-partition.Messages()
-			if !ok {
-				return fmt.Errorf("partition consumer closed")
-			}
-
-			// Check if we've reached the end offset
-			if msg.Offset >= endOffset {
-				return nil
-			}
-
-			// Produce the message
-			_, _, err = producer.SendMessage(&sarama.ProducerMessage{
-				Topic: topic,
-				Key:   sarama.StringEncoder(msg.Key),
-				Value: sarama.ByteEncoder(msg.Value),
-			})
-			if err != nil {
-				return fmt.Errorf("failed to replay message: %v", err)
-			}
-		}
-	}
-}
-
-// ValidateMessage validates a message against a schema
-func (s *MessageService) ValidateMessage(msg *Message) error {
-	switch msg.Format {
-	case FormatJSON:
-		return s.validateJSON(msg.Value)
-	case FormatAvro:
-		return s.validateAvro(msg.Value)
-	case FormatProtobuf:
-		return s.validateProtobuf(msg.Value)
-	default:
-		return fmt.Errorf("unsupported message format: %s", msg.Format)
-	}
-}
-
-// SearchMessages searches for messages in a topic based on the search criteria
-func (s *MessageService) SearchMessages(ctx context.Context, topic string, search *MessageSearch) ([]Message, error) {
-	// Create a consumer
-	consumer, err := sarama.NewConsumer(s.client.Brokers, s.config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create consumer: %v", err)
-	}
-	defer consumer.Close()
-
-	// Get topic partitions
-	partitions, err := consumer.Partitions(topic)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get partitions: %v", err)
+	msg := &sarama.ProducerMessage{
+		Topic:     topic,
+		Partition: partition,
+		Key:       sarama.ByteEncoder(key),
+		Value:     sarama.ByteEncoder(value),
 	}
 
-	var messages []Message
-	for _, partition := range partitions {
-		// Create partition consumer
-		pc, err := consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create partition consumer: %v", err)
-		}
-		defer pc.Close()
+	fmt.Printf("Service: Producing to partition: %d\n", partition)
 
-		// Read messages
-		for msg := range pc.Messages() {
-			// Check if message matches search criteria
-			if s.matchesSearch(msg, search) {
-				message, err := s.parseMessage(msg)
-				if err != nil {
-					continue
-				}
-				messages = append(messages, message)
-			}
-		}
-	}
-
-	return messages, nil
-}
-
-// matchesSearch checks if a message matches the search criteria
-func (s *MessageService) matchesSearch(msg *sarama.ConsumerMessage, search *MessageSearch) bool {
-	// Check time range if specified
-	if search.StartTime != nil && msg.Timestamp.Before(*search.StartTime) {
-		return false
-	}
-	if search.EndTime != nil && msg.Timestamp.After(*search.EndTime) {
-		return false
-	}
-
-	// Check if message content matches search query
-	if search.Query != "" {
-		// Search in key
-		if strings.Contains(string(msg.Key), search.Query) {
-			return true
-		}
-
-		// Search in value
-		if strings.Contains(string(msg.Value), search.Query) {
-			return true
-		}
-
-		// If no match found, return false
-		return false
-	}
-
-	return true
-}
-
-// Helper functions
-
-func (s *MessageService) matchesFilter(msg *sarama.ConsumerMessage, filter *MessageFilter) bool {
-	if filter.Key != "" && string(msg.Key) != filter.Key {
-		return false
-	}
-
-	if filter.Value != "" {
-		valueStr := string(msg.Value)
-		if valueStr != filter.Value {
-			return false
-		}
-	}
-
-	if filter.StartTime != nil && msg.Timestamp.Before(*filter.StartTime) {
-		return false
-	}
-
-	if filter.EndTime != nil && msg.Timestamp.After(*filter.EndTime) {
-		return false
-	}
-
-	return true
-}
-
-// parseMessage parses a Kafka message into our Message type
-func (s *MessageService) parseMessage(msg *sarama.ConsumerMessage) (Message, error) {
-	// Parse message value based on format
-	value, format, err := s.parseMessageValue(msg.Value)
-	if err != nil {
-		return Message{}, fmt.Errorf("failed to parse message value: %v", err)
-	}
-
-	return Message{
-		Topic:     msg.Topic,
-		Partition: msg.Partition,
-		Offset:    msg.Offset,
-		Key:       string(msg.Key),
-		Value:     value,
-		Timestamp: msg.Timestamp,
-		Format:    format,
-	}, nil
-}
-
-// parseMessageValue parses the message value based on its format
-func (s *MessageService) parseMessageValue(value []byte) (interface{}, MessageFormat, error) {
-	// Try to parse as JSON first
-	var jsonValue interface{}
-	if err := json.Unmarshal(value, &jsonValue); err == nil {
-		return jsonValue, FormatJSON, nil
-	}
-
-	// If not JSON, return as string
-	return string(value), FormatString, nil
-}
-
-func (s *MessageService) validateJSON(value interface{}) error {
-	// Basic JSON validation
-	_, err := json.Marshal(value)
+	_, _, err = producer.SendMessage(msg)
 	return err
 }
-
-func (s *MessageService) validateAvro(value interface{}) error {
-	// TODO: Implement Avro validation
-	return nil
-}
-
-func (s *MessageService) validateProtobuf(value interface{}) error {
-	// TODO: Implement Protobuf validation
-	return nil
-} 
