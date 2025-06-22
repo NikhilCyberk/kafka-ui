@@ -1,45 +1,101 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
-
-	"github.com/IBM/sarama"
 )
 
 type GroupMember struct {
-	ClientID      string   `json:"client_id"`
-	ClientHost    string   `json:"client_host"`
-	MemberID      string   `json:"member_id"`
-	Topics        []string `json:"topics"`
+	ClientID           string             `json:"client_id"`
+	ClientHost         string             `json:"client_host"`
+	MemberID           string             `json:"member_id"`
+	Topics             []string           `json:"topics"`
 	AssignedPartitions map[string][]int32 `json:"assigned_partitions"`
 }
 
 type ConsumerGroupService struct {
-	client *KafkaClient
-	config *sarama.Config
+	kafkaService *Service
 }
 
-func NewConsumerGroupService(client *KafkaClient) *ConsumerGroupService {
-	config := sarama.NewConfig()
-	config.Version = sarama.V2_0_0_0
+func NewConsumerGroupService(kafkaService *Service) *ConsumerGroupService {
 	return &ConsumerGroupService{
-		client: client,
-		config: config,
+		kafkaService: kafkaService,
 	}
 }
 
-// GetConsumerGroups returns a list of all consumer groups
-func (s *ConsumerGroupService) GetConsumerGroups(ctx context.Context) ([]string, error) {
-	admin, err := sarama.NewClusterAdmin(s.client.Brokers, s.config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cluster admin: %v", err)
+// ConsumerGroupSummary is returned to the frontend
+type ConsumerGroupSummary struct {
+	GroupID     string `json:"group_id"`
+	State       string `json:"state"`
+	NumMembers  int    `json:"num_members"`
+	NumTopics   int    `json:"num_topics"`
+	ConsumerLag int64  `json:"consumer_lag"`
+}
+
+// ConsumerGroupDetails is returned to the frontend
+type ConsumerGroupDetails struct {
+	GroupID      string        `json:"group_id"`
+	State        string        `json:"state"`
+	Protocol     string        `json:"protocol"`
+	ProtocolType string        `json:"protocol_type"`
+	Members      []GroupMember `json:"members"`
+}
+
+// parseMemberAssignment parses the member assignment bytes and returns a map of topics to partitions.
+func parseMemberAssignment(assignment []byte) (map[string][]int32, error) {
+	topics := make(map[string][]int32)
+	if len(assignment) == 0 {
+		return topics, nil
 	}
-	defer admin.Close()
+	buf := bytes.NewBuffer(assignment)
+	// Version (int16)
+	var version int16
+	if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
+		return topics, err
+	}
+	// Topic count (array length)
+	var topicCount int32
+	if err := binary.Read(buf, binary.BigEndian, &topicCount); err != nil {
+		return topics, err
+	}
+	for i := int32(0); i < topicCount; i++ {
+		// Topic name
+		var topicLen int16
+		if err := binary.Read(buf, binary.BigEndian, &topicLen); err != nil {
+			return topics, err
+		}
+		topicName := make([]byte, topicLen)
+		if _, err := buf.Read(topicName); err != nil {
+			return topics, err
+		}
+		// Partition count
+		var partitionCount int32
+		if err := binary.Read(buf, binary.BigEndian, &partitionCount); err != nil {
+			return topics, err
+		}
+		partitions := make([]int32, partitionCount)
+		for j := int32(0); j < partitionCount; j++ {
+			if err := binary.Read(buf, binary.BigEndian, &partitions[j]); err != nil {
+				return topics, err
+			}
+		}
+		topics[string(topicName)] = partitions
+	}
+	return topics, nil
+}
+
+// GetConsumerGroups returns a list of all consumer groups for a specific cluster.
+func (s *ConsumerGroupService) GetConsumerGroups(ctx context.Context, clusterName string) ([]ConsumerGroupSummary, error) {
+	admin, err := s.kafkaService.GetClient(clusterName)
+	if err != nil {
+		return nil, err
+	}
 
 	groups, err := admin.ListConsumerGroups()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list consumer groups: %v", err)
+		return nil, fmt.Errorf("failed to list consumer groups for cluster %s: %w", clusterName, err)
 	}
 
 	groupIDs := make([]string, 0, len(groups))
@@ -47,90 +103,91 @@ func (s *ConsumerGroupService) GetConsumerGroups(ctx context.Context) ([]string,
 		groupIDs = append(groupIDs, groupID)
 	}
 
-	return groupIDs, nil
-}
-
-// GetConsumerGroupDetails returns detailed information about a consumer group
-func (s *ConsumerGroupService) GetConsumerGroupDetails(ctx context.Context, groupID string) (map[string]interface{}, error) {
-	admin, err := sarama.NewClusterAdmin(s.client.Brokers, s.config)
+	// Describe all groups to get their state, members
+	desc, err := admin.DescribeConsumerGroups(groupIDs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cluster admin: %v", err)
-	}
-	defer admin.Close()
-
-	// Get group description
-	desc, err := admin.DescribeConsumerGroups([]string{groupID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe consumer group: %v", err)
+		return nil, fmt.Errorf("failed to describe consumer groups: %w", err)
 	}
 
-	if len(desc) == 0 {
-		return nil, fmt.Errorf("consumer group not found")
+	// Get lag for all groups
+	metricsSvc := NewMetricsService(s.kafkaService)
+	lagList, _ := metricsSvc.GetConsumerGroupsLag(ctx, clusterName)
+	lagMap := make(map[string]int64)
+	for _, lag := range lagList {
+		lagMap[lag.GroupID] += lag.TotalLag
 	}
 
-	group := desc[0]
-	members := make([]GroupMember, 0, len(group.Members))
-	
-	// Collect unique topics from all members
-	uniqueTopics := make(map[string]struct{})
-	
-	for _, member := range group.Members {
-		topics := make([]string, 0)
-		assignedPartitions := make(map[string][]int32)
-
-		// Extract topics and partitions from member assignments
-		if len(member.MemberAssignment) > 0 {
-			// Create a new consumer group to decode the assignment
-			consumer, err := sarama.NewConsumerGroup(s.client.Brokers, groupID, s.config)
-			if err == nil {
-				defer consumer.Close()
-				
-				// Get the member's topics and partitions
-				for _, topic := range member.MemberMetadata {
-					topics = append(topics, string(topic))
-					uniqueTopics[string(topic)] = struct{}{}
-				}
-			}
-		}
-
-		members = append(members, GroupMember{
-			ClientID:      member.ClientId,
-			ClientHost:    member.ClientHost,
-			MemberID:      member.MemberId,
-			Topics:        topics,
-			AssignedPartitions: assignedPartitions,
-		})
-	}
-
-	// Convert unique topics map to slice
-	topics := make([]string, 0, len(uniqueTopics))
-	for topic := range uniqueTopics {
-		topics = append(topics, topic)
-	}
-
-	// Get offsets for each topic-partition
-	offsets := make(map[string]int64)
-	for topic := range uniqueTopics {
-		offset, err := admin.ListConsumerGroupOffsets(groupID, map[string][]int32{
-			topic: nil, // Get all partitions
-		})
-		if err != nil {
+	summaries := make([]ConsumerGroupSummary, 0, len(desc))
+	for _, d := range desc {
+		if d == nil {
 			continue
 		}
-		if block, ok := offset.Blocks[topic]; ok {
-			for partition, partitionOffset := range block {
-				offsets[fmt.Sprintf("%s-%d", topic, partition)] = partitionOffset.Offset
+		// Count unique topics
+		topicSet := make(map[string]struct{})
+		for _, m := range d.Members {
+			topics, err := parseMemberAssignment(m.MemberAssignment)
+			if err != nil {
+				continue
+			}
+			for t := range topics {
+				topicSet[t] = struct{}{}
 			}
 		}
+		summaries = append(summaries, ConsumerGroupSummary{
+			GroupID:     d.GroupId,
+			State:       d.State,
+			NumMembers:  len(d.Members),
+			NumTopics:   len(topicSet),
+			ConsumerLag: lagMap[d.GroupId],
+		})
 	}
 
-	return map[string]interface{}{
-		"group_id":       group.GroupId,
-		"members":        members,
-		"state":          group.State,
-		"protocol":       group.Protocol,
-		"protocol_type":  group.ProtocolType,
-		"topics":         topics,
-		"offsets":        offsets,
-	}, nil
-} 
+	return summaries, nil
+}
+
+// GetConsumerGroupDetails returns detailed information about a consumer group.
+func (s *ConsumerGroupService) GetConsumerGroupDetails(ctx context.Context, clusterName, groupID string) (*ConsumerGroupDetails, error) {
+	admin, err := s.kafkaService.GetClient(clusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	desc, err := admin.DescribeConsumerGroups([]string{groupID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe consumer group %s: %w", groupID, err)
+	}
+	if len(desc) == 0 || desc[0] == nil {
+		return nil, fmt.Errorf("consumer group '%s' not found", groupID)
+	}
+	d := desc[0]
+
+	var memberList []GroupMember
+	for _, m := range d.Members {
+		assignedTopics, err := parseMemberAssignment(m.MemberAssignment)
+		if err != nil {
+			// Log or handle error if necessary, but continue processing
+			continue
+		}
+
+		topics := make([]string, 0, len(assignedTopics))
+		for topic := range assignedTopics {
+			topics = append(topics, topic)
+		}
+
+		member := GroupMember{
+			ClientID:   m.ClientId,
+			ClientHost: m.ClientHost,
+			Topics:     topics,
+		}
+		memberList = append(memberList, member)
+	}
+
+	resp := &ConsumerGroupDetails{
+		GroupID:      d.GroupId,
+		State:        d.State,
+		Protocol:     d.Protocol,
+		ProtocolType: d.ProtocolType,
+		Members:      memberList,
+	}
+	return resp, nil
+}

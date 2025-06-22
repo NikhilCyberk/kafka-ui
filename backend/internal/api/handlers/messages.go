@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"fmt"
-	"net/http"
-	"time"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nikhilgoenkatech/kafka-ui/internal/kafka"
-	"github.com/IBM/sarama"
-	"encoding/json"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
 )
 
 type MessageHandler struct {
@@ -19,198 +18,52 @@ func NewMessageHandler(service *kafka.MessageService) *MessageHandler {
 	return &MessageHandler{service: service}
 }
 
-// GetMessages handles GET requests to /api/messages/:topic
 func (h *MessageHandler) GetMessages(c *gin.Context) {
-	topic := c.Param("topic")
-	fmt.Printf("Received request for messages from topic: %s\n", topic)
-	
-	if topic == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topic is required"})
-		return
-	}
-
-	// Parse filter parameters
-	filter := &kafka.MessageFilter{}
-	fmt.Printf("Query parameters: %v\n", c.Request.URL.Query())
-
-	if key := c.Query("key"); key != "" {
-		filter.Key = key
-	}
-
-	if value := c.Query("value"); value != "" {
-		filter.Value = value
-	}
-
-	if startTime := c.Query("start_time"); startTime != "" {
-		t, err := time.Parse(time.RFC3339, startTime)
-		if err == nil {
-			filter.StartTime = &t
-		}
-	}
-
-	if endTime := c.Query("end_time"); endTime != "" {
-		t, err := time.Parse(time.RFC3339, endTime)
-		if err == nil {
-			filter.EndTime = &t
-		}
-	}
-
-	if format := c.Query("format"); format != "" {
-		filter.Format = kafka.MessageFormat(format)
-	}
-
-	fmt.Printf("Fetching messages with filter: %+v\n", filter)
-	messages, err := h.service.GetMessages(c.Request.Context(), topic, filter)
+	clusterName := c.Param("clusterName")
+	topicName := c.Param("topicName")
+	limitStr := c.DefaultQuery("limit", "100")
+	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		fmt.Printf("Error fetching messages: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewValidationError("Invalid limit parameter"))
 		return
 	}
 
-	// Ensure we always return an array, even if empty
-	if messages == nil {
-		messages = make([]kafka.Message, 0)
-	}
-
-	fmt.Printf("Returning %d messages\n", len(messages))
-	c.JSON(http.StatusOK, messages)
-}
-
-// ReplayMessages handles POST requests to /api/messages/:topic/replay
-func (h *MessageHandler) ReplayMessages(c *gin.Context) {
-	topic := c.Param("topic")
-	if topic == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topic is required"})
-		return
-	}
-
-	var request struct {
-		StartOffset int64 `json:"start_offset" binding:"required"`
-		EndOffset   int64 `json:"end_offset" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err := h.service.ReplayMessages(c.Request.Context(), topic, request.StartOffset, request.EndOffset)
+	messages, err := h.service.GetLatestMessages(c.Request.Context(), clusterName, topicName, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get messages: "+err.Error()))
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Messages replayed successfully"})
+	utils.SendSuccess(c, messages, "Messages retrieved successfully")
 }
 
-// ValidateMessage handles POST requests to /api/messages/validate
-func (h *MessageHandler) ValidateMessage(c *gin.Context) {
-	var message kafka.Message
-	if err := c.ShouldBindJSON(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := h.service.ValidateMessage(&message); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Message is valid"})
+type ProduceMessageRequest struct {
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Partition *int32 `json:"partition"`
 }
 
-// ProduceMessage handles POST requests to /api/messages/:topic
 func (h *MessageHandler) ProduceMessage(c *gin.Context) {
-	topic := c.Param("topic")
-	if topic == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topic is required"})
+	clusterName := c.Param("clusterName")
+	topicName := c.Param("topicName")
+
+	var req ProduceMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.SendError(c, errors.NewValidationError("Invalid request body: "+err.Error()))
 		return
 	}
 
-	var message kafka.Message
-	if err := c.ShouldBindJSON(&message); err != nil {
-		fmt.Printf("Error binding JSON: %v\n", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid message format: %v", err)})
-		return
+	partition := int32(-1)
+	if req.Partition != nil {
+		partition = *req.Partition
 	}
 
-	// Set default format if not provided
-	if message.Format == "" {
-		message.Format = kafka.FormatJSON
-	}
+	fmt.Printf("API: Producing to partition: %v (raw: %v)\n", partition, req.Partition)
 
-	// Validate message format
-	switch message.Format {
-	case kafka.FormatJSON, kafka.FormatString:
-		// Valid formats
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported message format: %s", message.Format)})
-		return
-	}
-
-	fmt.Printf("Creating producer for topic: %s\n", topic)
-	// Create a producer
-	producer, err := sarama.NewSyncProducer(h.service.GetBrokers(), h.service.GetConfig())
+	err := h.service.ProduceMessage(c.Request.Context(), clusterName, topicName, []byte(req.Key), []byte(req.Value), partition)
 	if err != nil {
-		fmt.Printf("Failed to create producer: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create producer: %v", err)})
-		return
-	}
-	defer producer.Close()
-
-	// Convert value to bytes based on format
-	var valueBytes []byte
-	switch message.Format {
-	case kafka.FormatJSON:
-		valueBytes, err = json.Marshal(message.Value)
-		if err != nil {
-			fmt.Printf("Failed to marshal JSON: %v\n", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to marshal JSON: %v", err)})
-			return
-		}
-	case kafka.FormatString:
-		valueBytes = []byte(fmt.Sprintf("%v", message.Value))
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported message format: %s", message.Format)})
+		utils.SendError(c, errors.NewInternalError("Failed to produce message: "+err.Error()))
 		return
 	}
 
-	fmt.Printf("Producing message to topic %s: key=%s, value=%s\n", topic, message.Key, string(valueBytes))
-	// Produce the message
-	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
-		Topic: topic,
-		Key:   sarama.StringEncoder(message.Key),
-		Value: sarama.ByteEncoder(valueBytes),
-	})
-	if err != nil {
-		fmt.Printf("Failed to produce message: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to produce message: %v", err)})
-		return
-	}
-
-	fmt.Printf("Message produced successfully to topic %s\n", topic)
-	c.JSON(http.StatusOK, gin.H{"message": "Message produced successfully"})
-}
-
-// SearchMessages handles POST requests to /api/messages/:topic/search
-func (h *MessageHandler) SearchMessages(c *gin.Context) {
-	topic := c.Param("topic")
-	if topic == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topic is required"})
-		return
-	}
-
-	var search kafka.MessageSearch
-	if err := c.ShouldBindJSON(&search); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	messages, err := h.service.SearchMessages(c.Request.Context(), topic, &search)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, messages)
+	utils.SendSuccess(c, gin.H{"status": "success"}, "Message produced successfully")
 }

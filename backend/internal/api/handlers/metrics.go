@@ -1,68 +1,84 @@
+// backend/internal/api/handlers/metrics.go
 package handlers
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/nikhilgoenkatech/kafka-ui/internal/kafka"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
 )
 
+// MetricsHandler handles HTTP requests for Kafka metrics.
 type MetricsHandler struct {
-	metricsService *kafka.MetricsService
+	service *kafka.MetricsService
 }
 
-func NewMetricsHandler(metricsService *kafka.MetricsService) *MetricsHandler {
-	return &MetricsHandler{
-		metricsService: metricsService,
-	}
+// NewMetricsHandler creates a new MetricsHandler.
+func NewMetricsHandler(service *kafka.MetricsService) *MetricsHandler {
+	return &MetricsHandler{service: service}
 }
 
-// GetMessagesPerSecond handles GET /api/metrics/messages-per-second
-func (h *MetricsHandler) GetMessagesPerSecond(c *gin.Context) {
-	metrics, err := h.metricsService.GetMessagesPerSecond(c.Request.Context())
+// GetConsumerGroupsLag handles the request to get consumer group lag.
+func (h *MetricsHandler) GetConsumerGroupsLag(c *gin.Context) {
+	clusterName := c.Param("clusterName")
+
+	lag, err := h.service.GetConsumerGroupsLag(c.Request.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get consumer group lag: "+err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, metrics)
+
+	utils.SendSuccess(c, lag, "Consumer group lag retrieved successfully")
 }
 
-// GetLagMetrics handles GET /api/metrics/lag
-func (h *MetricsHandler) GetLagMetrics(c *gin.Context) {
-	metrics, err := h.metricsService.GetLagMetrics(c.Request.Context())
+// GetClusterHealth handles the request to get cluster health metrics.
+func (h *MetricsHandler) GetClusterHealth(c *gin.Context) {
+	clusterName := c.Param("clusterName")
+
+	health, err := h.service.GetClusterHealth(c.Request.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get cluster health: "+err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, metrics)
+
+	utils.SendSuccess(c, health, "Cluster health retrieved successfully")
 }
 
-// GetBrokerHealth handles GET /api/metrics/broker-health
-func (h *MetricsHandler) GetBrokerHealth(c *gin.Context) {
-	health, err := h.metricsService.GetBrokerHealth(c.Request.Context())
+// GetBrokerMetrics handles the request to get broker metrics.
+func (h *MetricsHandler) GetBrokerMetrics(c *gin.Context) {
+	clusterName := c.Param("clusterName")
+
+	metrics, err := h.service.GetBrokerMetrics(c.Request.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get broker metrics: "+err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, health)
+
+	utils.SendSuccess(c, metrics, "Broker metrics retrieved successfully")
 }
 
-// GetPartitionDistribution handles GET /api/metrics/partition-distribution
-func (h *MetricsHandler) GetPartitionDistribution(c *gin.Context) {
-	distribution, err := h.metricsService.GetPartitionDistribution(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, distribution)
-}
-
-// GetTopicMetrics handles GET /api/metrics/topic-metrics
+// GetTopicMetrics handles the request to get topic metrics.
 func (h *MetricsHandler) GetTopicMetrics(c *gin.Context) {
-	metrics, err := h.metricsService.GetTopicMetrics(c.Request.Context())
+	clusterName := c.Param("clusterName")
+
+	metrics, err := h.service.GetTopicMetrics(c.Request.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get topic metrics: "+err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, metrics)
-} 
+
+	utils.SendSuccess(c, metrics, "Topic metrics retrieved successfully")
+}
+
+// GetConsumerGroupMetrics handles the request to get consumer group metrics.
+func (h *MetricsHandler) GetConsumerGroupMetrics(c *gin.Context) {
+	clusterName := c.Param("clusterName")
+
+	metrics, err := h.service.GetConsumerGroupMetrics(c.Request.Context(), clusterName)
+	if err != nil {
+		utils.SendError(c, errors.NewInternalError("Failed to get consumer group metrics: "+err.Error()))
+		return
+	}
+
+	utils.SendSuccess(c, metrics, "Consumer group metrics retrieved successfully")
+}

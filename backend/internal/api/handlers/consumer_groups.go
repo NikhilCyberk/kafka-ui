@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/nikhilgoenkatech/kafka-ui/internal/kafka"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
 )
 
 type ConsumerGroupHandler struct {
@@ -17,23 +17,25 @@ func NewConsumerGroupHandler(service *kafka.ConsumerGroupService) *ConsumerGroup
 
 // GetConsumerGroups handles GET /api/consumer-groups
 func (h *ConsumerGroupHandler) GetConsumerGroups(c *gin.Context) {
-	groups, err := h.service.GetConsumerGroups(c.Request.Context())
+	clusterName := c.Param("clusterName")
+	groups, err := h.service.GetConsumerGroups(c.Request.Context(), clusterName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get consumer groups: "+err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"consumer_groups": groups})
+	utils.SendSuccess(c, groups, "Consumer groups retrieved successfully")
 }
 
 // GetConsumerGroupDetails handles GET /api/consumer-groups/:groupId
 func (h *ConsumerGroupHandler) GetConsumerGroupDetails(c *gin.Context) {
-	groupId := c.Param("groupId")
-	details, err := h.service.GetConsumerGroupDetails(c.Request.Context(), groupId)
+	clusterName := c.Param("clusterName")
+	groupID := c.Param("groupId")
+	details, err := h.service.GetConsumerGroupDetails(c.Request.Context(), clusterName, groupID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.SendError(c, errors.NewInternalError("Failed to get consumer group details: "+err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, details)
+	utils.SendSuccess(c, details, "Consumer group details retrieved successfully")
 }

@@ -2,360 +2,116 @@
 package kafka
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"strings"
+	"sync"
 	"time"
 
-	"github.com/IBM/sarama" // Import the Sarama package for admin functionality
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
-// KafkaClient handles interactions with Kafka brokers
-type KafkaClient struct {
-	Brokers []string
-	Conn    *kafka.Conn
+// Service manages multiple Kafka cluster clients.
+type Service struct {
+	clients map[string]sarama.ClusterAdmin
+	brokers map[string][]string
+	mu      sync.RWMutex
 }
 
-// NewKafkaClient creates a new Kafka client instance
-func NewKafkaClient() (*KafkaClient, error) {
-	brokersStr := os.Getenv("KAFKA_BROKERS")
-	if brokersStr == "" {
-		brokersStr = "localhost:9092" // Default broker
+// NewService creates a new Kafka service manager.
+func NewService() *Service {
+	return &Service{
+		clients: make(map[string]sarama.ClusterAdmin),
+		brokers: make(map[string][]string),
 	}
-	brokers := strings.Split(brokersStr, ",")
+}
 
-	// Create connection to first broker for admin operations
-	conn, err := kafka.Dial("tcp", brokers[0])
+// AddCluster connects to a new Kafka cluster and adds it to the manager.
+func (s *Service) AddCluster(name string, brokers []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.clients[name]; exists {
+		return fmt.Errorf("cluster with name '%s' already exists", name)
+	}
+
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_5_0_0 // A more modern, safe default
+	config.ClientID = "kafka-ui-backend"
+	// Add a timeout to prevent the request from hanging indefinitely on an invalid address.
+	config.Net.DialTimeout = 5 * time.Second
+
+	admin, err := sarama.NewClusterAdmin(brokers, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %v", err)
+		return fmt.Errorf("failed to create cluster admin for %s: %w", name, err)
 	}
 
-	return &KafkaClient{
-		Brokers: brokers,
-		Conn:    conn,
-	}, nil
-}
-
-// Close closes the Kafka connection
-func (c *KafkaClient) Close() error {
-	if c.Conn != nil {
-		return c.Conn.Close()
+	// Test the connection by listing topics. This is a lightweight way to verify connectivity.
+	_, err = admin.ListTopics()
+	if err != nil {
+		admin.Close() // Clean up the failed connection
+		return fmt.Errorf("failed to connect to cluster %s: %w", name, err)
 	}
+
+	s.clients[name] = admin
+	s.brokers[name] = brokers
 	return nil
 }
 
-// ListTopics returns all topics in the Kafka cluster
-func (c *KafkaClient) ListTopics() ([]string, error) {
-	conn, err := kafka.Dial("tcp", c.Brokers[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %v", err)
-	}
-	defer conn.Close()
+// RemoveCluster disconnects and removes a Kafka cluster from the manager.
+func (s *Service) RemoveCluster(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	partitions, err := conn.ReadPartitions()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read partitions: %v", err)
+	client, exists := s.clients[name]
+	if !exists {
+		return fmt.Errorf("cluster '%s' not found", name)
 	}
 
-	// Use a map to remove duplicates
-	topicsMap := make(map[string]bool)
-	for _, p := range partitions {
-		topicsMap[p.Topic] = true
-	}
-
-	// Convert map keys to slice
-	topics := make([]string, 0, len(topicsMap))
-	for topic := range topicsMap {
-		topics = append(topics, topic)
-	}
-
-	return topics, nil
+	delete(s.clients, name)
+	delete(s.brokers, name)
+	return client.Close()
 }
 
-// GetTopicDetails retrieves details about a specific topic
-func (c *KafkaClient) GetTopicDetails(topic string) (*TopicDetails, error) {
-	conn, err := kafka.Dial("tcp", c.Brokers[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %v", err)
-	}
-	defer conn.Close()
+// GetClient retrieves a client for a specific cluster.
+func (s *Service) GetClient(clusterName string) (sarama.ClusterAdmin, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	partitions, err := conn.ReadPartitions(topic)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read partitions: %v", err)
+	client, exists := s.clients[clusterName]
+	if !exists {
+		return nil, fmt.Errorf("client for cluster '%s' not found", clusterName)
 	}
-
-	return &TopicDetails{
-		Name:        topic,
-		Partitions:  len(partitions),
-		Replicas:    len(partitions[0].Replicas),
-		LeaderCount: countLeaders(partitions),
-	}, nil
+	return client, nil
 }
 
-// CreateTopic creates a new Kafka topic
-func (c *KafkaClient) CreateTopic(name string, partitions int, replicationFactor int) error {
-	conn, err := kafka.Dial("tcp", c.Brokers[0])
-	if err != nil {
-		return fmt.Errorf("failed to dial: %v", err)
-	}
-	defer conn.Close()
+// GetBrokers retrieves the broker list for a specific cluster.
+func (s *Service) GetBrokers(clusterName string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	topicConfig := kafka.TopicConfig{
-		Topic:             name,
-		NumPartitions:     partitions,
-		ReplicationFactor: replicationFactor,
+	brokers, exists := s.brokers[clusterName]
+	if !exists {
+		return nil, fmt.Errorf("brokers for cluster '%s' not found", clusterName)
 	}
-
-	return conn.CreateTopics(topicConfig)
+	return brokers, nil
 }
 
-// DeleteTopic deletes a Kafka topic
-func (c *KafkaClient) DeleteTopic(name string) error {
-	conn, err := kafka.Dial("tcp", c.Brokers[0])
-	if err != nil {
-		return fmt.Errorf("failed to dial: %v", err)
-	}
-	defer conn.Close()
+// ListClusters returns the names of all managed clusters.
+func (s *Service) ListClusters() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	return conn.DeleteTopics(name)
+	names := make([]string, 0, len(s.clients))
+	for name := range s.clients {
+		names = append(names, name)
+	}
+	return names
 }
 
-// ProduceMessage publishes a message to a Kafka topic
-func (c *KafkaClient) ProduceMessage(topic, key, value string) error {
-	writer := kafka.Writer{
-		Addr:         kafka.TCP(c.Brokers...),
-		Topic:        topic,
-		Balancer:     &kafka.LeastBytes{},
-		BatchTimeout: 50 * time.Millisecond,
+// Close gracefully closes all cluster connections.
+func (s *Service) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, client := range s.clients {
+		client.Close()
 	}
-	defer writer.Close()
-
-	message := kafka.Message{
-		Key:   []byte(key),
-		Value: []byte(value),
-		Time:  time.Now(),
-	}
-
-	err := writer.WriteMessages(context.Background(), message)
-	if err != nil {
-		return fmt.Errorf("failed to write message: %v", err)
-	}
-
-	return nil
-}
-
-// ConsumeMessages retrieves messages from a Kafka topic
-func (c *KafkaClient) ConsumeMessages(topic string, maxMessages int) ([]KafkaMessage, error) {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   c.Brokers,
-		Topic:     topic,
-		Partition: 0,
-		MinBytes:  10e3, // 10KB
-		MaxBytes:  10e6, // 10MB
-	})
-	defer reader.Close()
-
-	// Set initial offset to oldest messages
-	err := reader.SetOffset(kafka.FirstOffset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set offset: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	messages := make([]KafkaMessage, 0, maxMessages)
-	for i := 0; i < maxMessages; i++ {
-		m, err := reader.ReadMessage(ctx)
-		if err != nil {
-			// If we timed out and have some messages, return them
-			if len(messages) > 0 {
-				break
-			}
-			return nil, fmt.Errorf("failed to read message: %v", err)
-		}
-
-		messages = append(messages, KafkaMessage{
-			Topic:     m.Topic,
-			Partition: m.Partition,
-			Offset:    m.Offset,
-			Key:       string(m.Key),
-			Value:     string(m.Value),
-			Timestamp: m.Time,
-		})
-	}
-
-	return messages, nil
-}
-
-// ListConsumerGroups returns all consumer groups in the Kafka cluster
-func (c *KafkaClient) ListConsumerGroups() ([]string, error) {
-	// Using Sarama admin client
-	config := sarama.NewConfig()
-	// Set appropriate version
-	config.Version = sarama.V2_0_0_0
-
-	admin, err := sarama.NewClusterAdmin(c.Brokers, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create admin client: %v", err)
-	}
-	defer admin.Close()
-
-	groups, err := admin.ListConsumerGroups()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list consumer groups: %v", err)
-	}
-
-	groupIDs := make([]string, 0, len(groups))
-	for groupID := range groups {
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	return groupIDs, nil
-}
-
-// GetConsumerGroupDetails retrieves details about a specific consumer group
-func (c *KafkaClient) GetConsumerGroupDetails(groupID string) (*ConsumerGroupDetails, error) {
-	// Implementation using Sarama admin client
-	config := sarama.NewConfig()
-	config.Version = sarama.V2_0_0_0
-
-	admin, err := sarama.NewClusterAdmin(c.Brokers, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create admin client: %v", err)
-	}
-	defer admin.Close()
-
-	// Get consumer group description
-	description, err := admin.DescribeConsumerGroups([]string{groupID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe consumer group: %v", err)
-	}
-
-	if len(description) == 0 {
-		return nil, fmt.Errorf("no description found for group: %s", groupID)
-	}
-
-	// Get list of topics from members' assignments
-	topicsMap := make(map[string]struct{})
-	members := len(description[0].Members)
-
-	for _, member := range description[0].Members {
-		assignment, err := member.GetMemberAssignment()
-		if err != nil {
-			continue // Skip this member if we can't get assignment
-		}
-
-		for topic := range assignment.Topics {
-			topicsMap[topic] = struct{}{}
-		}
-	}
-
-	// Convert map to slice
-	topics := make([]string, 0, len(topicsMap))
-	for topic := range topicsMap {
-		topics = append(topics, topic)
-	}
-
-	// Create a client to get topic offsets
-	client, err := sarama.NewClient(c.Brokers, config)
-	if err != nil {
-		// If we can't create client for lag calculation, return what we have
-		return &ConsumerGroupDetails{
-			GroupID: groupID,
-			Topics:  topics,
-			Members: members,
-			Lag:     0,
-		}, nil
-	}
-	defer client.Close()
-
-	// Calculate approximate lag (difference between latest offset and committed offset)
-	// This is a simplified implementation
-	var totalLag int64 = 0
-
-	// Get the consumer group coordinator
-	offsetManager, err := sarama.NewOffsetManagerFromClient(groupID, client)
-	if err == nil {
-		defer offsetManager.Close()
-
-		// Try to calculate lag for each topic
-		for _, topic := range topics {
-			partitions, err := client.Partitions(topic)
-			if err != nil {
-				continue
-			}
-
-			for _, partition := range partitions {
-				// Get latest offset
-				latestOffset, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
-				if err != nil {
-					continue
-				}
-
-				// Get committed offset
-				partitionOffsetManager, err := offsetManager.ManagePartition(topic, partition)
-				if err != nil {
-					continue
-				}
-
-				committedOffset, _ := partitionOffsetManager.NextOffset()
-				partitionOffsetManager.Close()
-
-				if committedOffset > 0 { // Skip if no committed offset
-					lag := latestOffset - committedOffset
-					if lag > 0 {
-						totalLag += lag
-					}
-				}
-			}
-		}
-	}
-
-	return &ConsumerGroupDetails{
-		GroupID: groupID,
-		Topics:  topics,
-		Members: members,
-		Lag:     totalLag,
-	}, nil
-}
-
-// Helper functions
-func countLeaders(partitions []kafka.Partition) int {
-	leaderMap := make(map[int]bool)
-	for _, p := range partitions {
-		leaderMap[p.Leader.ID] = true
-	}
-	return len(leaderMap)
-}
-
-// Type definitions
-
-// TopicDetails contains information about a Kafka topic
-type TopicDetails struct {
-	Name        string `json:"name"`
-	Partitions  int    `json:"partitions"`
-	Replicas    int    `json:"replicas"`
-	LeaderCount int    `json:"leader_count"`
-}
-
-// KafkaMessage represents a message from a Kafka topic
-type KafkaMessage struct {
-	Topic     string    `json:"topic"`
-	Partition int       `json:"partition"`
-	Offset    int64     `json:"offset"`
-	Key       string    `json:"key"`
-	Value     string    `json:"value"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// ConsumerGroupDetails contains information about a Kafka consumer group
-type ConsumerGroupDetails struct {
-	GroupID string   `json:"group_id"`
-	Topics  []string `json:"topics"`
-	Members int      `json:"members"`
-	Lag     int64    `json:"lag"`
 }
