@@ -2,105 +2,53 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
-	"github.com/nikhilgoenkatech/kafka-ui/internal/api/handlers"
-	"github.com/nikhilgoenkatech/kafka-ui/internal/kafka"
-	"github.com/IBM/sarama"
+	"github.com/nikhilgoenkatech/kafka-ui/internal/api"
+	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+	// Setup Gin router with custom logging
+	router := gin.New()
+	router.Use(utils.LoggingMiddleware())
+	router.Use(utils.CORSMiddleware())
+	router.Use(utils.RateLimitMiddleware(100)) // 100 requests per minute per IP
+
+	// Register all routes (including authentication)
+	api.RegisterRoutes(router)
+
+	// Server setup
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
 	}
 
-	// Initialize Kafka client
-	client, err := kafka.NewKafkaClient()
-	if err != nil {
-		log.Fatalf("Failed to create Kafka client: %v", err)
-	}
-	defer client.Close()
-
-	// Create a Sarama client for metrics
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Version = sarama.V2_0_0_0
-	saramaClient, err := sarama.NewClient(client.Brokers, saramaConfig)
-	if err != nil {
-		log.Fatalf("Failed to create Sarama client: %v", err)
-	}
-	defer saramaClient.Close()
-
-	metricsService, err := kafka.NewMetricsService(saramaClient)
-	if err != nil {
-		log.Fatalf("Failed to create metrics service: %v", err)
-	}
-	metricsHandler := handlers.NewMetricsHandler(metricsService)
-
-	// Initialize services
-	topicService := kafka.NewTopicService(client)
-	messageService := kafka.NewMessageService(client)
-	consumerGroupService := kafka.NewConsumerGroupService(client)
-
-	// Initialize handlers
-	topicHandler := handlers.NewTopicHandler(topicService)
-	messageHandler := handlers.NewMessageHandler(messageService)
-	consumerGroupHandler := handlers.NewConsumerGroupHandler(consumerGroupService)
-
-	// Initialize router
-	router := gin.Default()
-
-	// Enable CORS
-	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
+	// Graceful shutdown
+	go func() {
+		log.Printf("Server starting on port 8080...")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
 		}
-		c.Next()
-	})
+	}()
 
-	// Register routes
-	api := router.Group("/api")
-	{
-		// Topic routes
-		api.GET("/topics", topicHandler.GetTopics)
-		api.GET("/topics/:name", topicHandler.GetTopicDetails)
-		api.POST("/topics", topicHandler.CreateTopic)
-		api.DELETE("/topics/:name", topicHandler.DeleteTopic)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
 
-		// Message routes
-		api.GET("/messages/:topic", messageHandler.GetMessages)
-		api.POST("/messages/:topic", messageHandler.ProduceMessage)
-		api.POST("/messages/:topic/replay", messageHandler.ReplayMessages)
-		api.POST("/messages/validate", messageHandler.ValidateMessage)
-
-		// Consumer group routes
-		api.GET("/consumer-groups", consumerGroupHandler.GetConsumerGroups)
-		api.GET("/consumer-groups/:groupId", consumerGroupHandler.GetConsumerGroupDetails)
-
-		// Metrics routes
-		api.GET("/metrics/messages-per-second", metricsHandler.GetMessagesPerSecond)
-		api.GET("/metrics/lag", metricsHandler.GetLagMetrics)
-		api.GET("/metrics/broker-health", metricsHandler.GetBrokerHealth)
-		api.GET("/metrics/partition-distribution", metricsHandler.GetPartitionDistribution)
-		api.GET("/metrics/topic-metrics", metricsHandler.GetTopicMetrics)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
 	}
 
-	// Get port from environment variable or use default
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	// Start server
-	log.Printf("Server starting on port %s", port)
-	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	log.Println("Server exiting")
 }
