@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import { Refresh as RefreshIcon, PlayArrow as PlayIcon, Stop as StopIcon } from '@mui/icons-material';
 import { getTopicDetails, getMessages, produceMessage } from '../services/api';
+import MessageProducer from '../components/messages/MessageProducer';
 
 function TopicView() {
     const { topicName } = useParams();
@@ -32,11 +33,6 @@ function TopicView() {
     const [error, setError] = useState(null);
     const [isPolling, setIsPolling] = useState(false);
     const [pollingInterval, setPollingInterval] = useState(null);
-    const [newMessage, setNewMessage] = useState({
-        value: '',
-        key: '',
-        format: 'json'
-    });
 
     useEffect(() => {
         fetchTopicDetails();
@@ -82,17 +78,11 @@ function TopicView() {
         setIsPolling(!isPolling);
     };
 
-    const handleProduceMessage = async () => {
-        try {
-            setError(null);
-            await produceMessage(topicName, newMessage);
-            setNewMessage({ value: '', key: '', format: 'json' });
-            fetchMessages();
-        } catch (error) {
-            console.error('Error producing message:', error);
-            setError(error.response?.data?.error || 'Failed to produce message');
-        }
-    };
+    // Sort messages by partition and offset before rendering
+    const sortedMessages = [...messages].sort((a, b) => {
+        if (a.partition !== b.partition) return a.partition - b.partition;
+        return a.offset - b.offset;
+    });
 
     if (loading) {
         return (
@@ -164,32 +154,7 @@ function TopicView() {
                                 Produce Message
                             </Typography>
                             <Divider sx={{ mb: 2 }} />
-                            <Box sx={{ mb: 2 }}>
-                                <TextField
-                                    fullWidth
-                                    label="Message Key"
-                                    value={newMessage.key}
-                                    onChange={(e) => setNewMessage(prev => ({ ...prev, key: e.target.value }))}
-                                    sx={{ mb: 2 }}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="Message Value"
-                                    multiline
-                                    rows={4}
-                                    value={newMessage.value}
-                                    onChange={(e) => setNewMessage(prev => ({ ...prev, value: e.target.value }))}
-                                    sx={{ mb: 2 }}
-                                />
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={handleProduceMessage}
-                                    disabled={!newMessage.value}
-                                >
-                                    Produce Message
-                                </Button>
-                            </Box>
+                            <MessageProducer topicName={topicName} onMessageSent={fetchMessages} />
                         </CardContent>
                     </Card>
                 </Grid>
@@ -214,7 +179,7 @@ function TopicView() {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {messages.map((message, index) => (
+                                        {sortedMessages.map((message, index) => (
                                             <TableRow key={index}>
                                                 <TableCell>{message.partition}</TableCell>
                                                 <TableCell>{message.offset}</TableCell>

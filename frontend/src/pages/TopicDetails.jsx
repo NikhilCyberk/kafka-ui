@@ -11,10 +11,6 @@ import {
     TableHead,
     TableRow,
     Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
     TextField,
     Alert,
     Snackbar,
@@ -25,15 +21,15 @@ import {
     Select,
     MenuItem,
     IconButton,
-    Tooltip,
     InputAdornment
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { FilterList, Clear, Search } from '@mui/icons-material';
-import { getTopicDetails, getMessages, produceMessage, searchMessages } from '../services/api';
+import { getTopicDetails, getMessages, searchMessages } from '../services/api';
 import MessageManager from '../components/messages/MessageManager';
+import MessageProducer from '../components/messages/MessageProducer';
 
 function TopicDetails() {
     const { topicName } = useParams();
@@ -41,7 +37,6 @@ function TopicDetails() {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [open, setOpen] = useState(false);
     const [success, setSuccess] = useState(null);
     const [showFilters, setShowFilters] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -54,13 +49,6 @@ function TopicDetails() {
         startTime: null,
         endTime: null,
         format: 'json'
-    });
-
-    const [newMessage, setNewMessage] = useState({
-        key: '',
-        value: '',
-        format: 'json',
-        headers: {}
     });
 
     useEffect(() => {
@@ -101,25 +89,13 @@ function TopicDetails() {
         fetchData();
     }, [topicName]);
 
-    const handleProduceMessage = async () => {
+    const handleMessageSent = async () => {
+        // Refresh messages after a message is sent
         try {
-            setError(null);
-            // Ensure the message has the required format
-            const messageToSend = {
-                ...newMessage,
-                format: newMessage.format || 'json'
-            };
-            await produceMessage(topicName, messageToSend);
-            setSuccess('Message produced successfully');
-            setOpen(false);
-            setNewMessage({ key: '', value: '', format: 'json', headers: {} });
-            
-            // Refresh messages after producing
             const messagesData = await getMessages(topicName, filters);
             setMessages(messagesData || []);
         } catch (error) {
-            console.error('Error producing message:', error);
-            setError(error.response?.data?.error || 'Failed to produce message');
+            console.error('Error refreshing messages:', error);
         }
     };
 
@@ -194,6 +170,12 @@ function TopicDetails() {
         }
     };
 
+    // Sort messages by partition and offset before rendering
+    const sortedMessages = [...messages].sort((a, b) => {
+        if (a.partition !== b.partition) return a.partition - b.partition;
+        return a.offset - b.offset;
+    });
+
     if (loading) {
         console.log('Rendering loading state');
         return (
@@ -249,11 +231,14 @@ function TopicDetails() {
                     >
                         Filters
                     </Button>
-                    <Button variant="contained" color="primary" onClick={() => setOpen(true)}>
-                    Produce Message
-                </Button>
                 </Box>
             </Box>
+
+            {/* Message Producer Component */}
+            <MessageProducer 
+                topicName={topicName} 
+                onMessageSent={handleMessageSent}
+            />
 
             {showFilters && (
                 <Paper sx={{ p: 2, mb: 3 }}>
@@ -358,7 +343,7 @@ function TopicDetails() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {messages.map((message) => (
+                        {sortedMessages.map((message) => (
                             <TableRow key={message.offset}>
                                 <TableCell>{message.offset}</TableCell>
                                 <TableCell>{message.key}</TableCell>
@@ -374,49 +359,8 @@ function TopicDetails() {
                             </TableRow>
                         ))}
                     </TableBody>
-            </Table>
+                </Table>
             </TableContainer>
-
-            <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-                <DialogTitle>Produce Message</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ pt: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Key"
-                                value={newMessage.key}
-                            onChange={(e) => setNewMessage(prev => ({ ...prev, key: e.target.value }))}
-                            sx={{ mb: 2 }}
-                        />
-                        <TextField
-                            fullWidth
-                            label="Value"
-                                value={newMessage.value}
-                            onChange={(e) => setNewMessage(prev => ({ ...prev, value: e.target.value }))}
-                            multiline
-                                rows={4}
-                            sx={{ mb: 2 }}
-                        />
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel>Format</InputLabel>
-                            <Select
-                                value={newMessage.format}
-                                label="Format"
-                                onChange={(e) => setNewMessage(prev => ({ ...prev, format: e.target.value }))}
-                            >
-                                <MenuItem value="json">JSON</MenuItem>
-                                <MenuItem value="string">String</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleProduceMessage} variant="contained" color="primary">
-                            Produce
-                        </Button>
-                </DialogActions>
-            </Dialog>
 
             <Snackbar
                 open={!!error}

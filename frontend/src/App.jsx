@@ -1,60 +1,69 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline, Container } from '@mui/material';
-import Navbar from './components/common/Navbar';
-import Dashboard from './pages/Dashboard';
-import Topics from './pages/Topics';
-import TopicDetails from './pages/TopicDetails';
-import ConsumerGroups from './pages/ConsumerGroups';
-import MetricsDashboard from './components/metrics/MetricsDashboard';
-import Overview from './pages/Overview';
-import TopicView from './pages/TopicView';
+import React, { useEffect } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 
-// Create a theme instance
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
+// Layouts & Pages
+import DashboardLayout from './components/layout/DashboardLayout';
+import LandingPage from './pages/landing/LandingPage';
+import DashboardWelcome from './pages/dashboard/DashboardWelcome';
+import Overview from './pages/dashboard/Overview';
+import Topics from './pages/topics/Topics';
+import Brokers from './pages/brokers/Brokers';
+import ConsumerGroups from './pages/consumers/ConsumerGroups';
+import Metrics from './pages/metrics/Metrics';
+import NotFound from './pages/NotFound';
+import TopicDetails from './pages/topics/TopicDetails';
+import ConsumerGroupDetails from './pages/consumers/ConsumerGroupDetails';
 
-// Router configuration with future flags
-const routerConfig = {
-  future: {
-    v7_startTransition: true,
-    v7_relativeSplatPath: true
-  }
-};
+// Authentication pages
+import Login from './pages/auth/Login';
+import Signup from './pages/auth/Signup';
+import Profile from './pages/auth/Profile';
 
-function App() {
-    return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router {...routerConfig}>
-                    <Navbar />
-        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-                        <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-                            <Route path="/topics" element={<Topics />} />
-            <Route path="/topics/:topicName" element={<TopicView />} />
-                            <Route path="/consumer-groups" element={<ConsumerGroups />} />
-            <Route path="/metrics" element={<MetricsDashboard />} />
-                        </Routes>
-        </Container>
-            </Router>
-    </ThemeProvider>
+// Components
+import ProtectedRoute from './components/common/ProtectedRoute';
+
+export default function App({ darkMode, onToggleDark }) {
+    const location = useLocation();
+
+    useEffect(() => {
+        // We can't initialize AOS here because it would re-init on every navigation
+        // It's better to do it in main.jsx or a top-level component that doesn't re-render on route change
+    }, []);
+
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [location.pathname]);
+
+  return (
+        <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<LandingPage darkMode={darkMode} onToggleDark={onToggleDark} />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            
+            {/* Protected dashboard routes */}
+            <Route 
+                path="/dashboard" 
+                element={
+                    <ProtectedRoute>
+                        <DashboardLayout darkMode={darkMode} onToggleDark={onToggleDark} />
+                    </ProtectedRoute>
+                }
+            >
+                <Route index element={<DashboardWelcome />} />
+                <Route path="profile" element={<Profile />} />
+                <Route path=":clusterName/overview" element={<Overview />} />
+                <Route path=":clusterName/brokers" element={<Brokers />} />
+                <Route path=":clusterName/topics" element={<Topics />} />
+                <Route path=":clusterName/topics/:topicName" element={<TopicDetails />} />
+                <Route path=":clusterName/consumer-groups" element={<ConsumerGroups />} />
+                <Route path=":clusterName/consumer-groups/:groupId" element={<ConsumerGroupDetails />} />
+                <Route path=":clusterName/metrics" element={<Metrics />} />
+            </Route>
+            
+            <Route path="*" element={<NotFound />} />
+        </Routes>
     );
 }
-
-export default App; 
