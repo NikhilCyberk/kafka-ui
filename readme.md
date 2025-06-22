@@ -210,22 +210,6 @@ The backend provides a RESTful API. All endpoints under `/api` are protected and
 - `GET /api/clusters/:clusterName/metrics/topics` - Metrics for all topics
 - `GET /api/clusters/:clusterName/metrics/consumer-groups` - Detailed metrics for consumer groups
 
-## 🧪 Testing
-
-### Backend Tests
-
-```bash
-cd backend
-go test ./...
-```
-
-### Frontend Tests
-
-```bash
-cd frontend
-npm test
-```
-
 ## 🚀 Deployment
 
 ### Production Build
