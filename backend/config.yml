@@ -1,0 +1,7 @@
+clusters:
+  - name: "development"
+    brokers:
+      - "localhost:9092"
+  - name: "production"
+    brokers:
+      - "localhost:9092"
