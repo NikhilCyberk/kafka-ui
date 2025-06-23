@@ -13,7 +13,7 @@ import Signup from '../auth/Signup';
 
 const sections = [
   { id: 'about', label: 'About' },
-  { id: 'services', label: 'Services' },
+  { id: 'features', label: 'Services' },
   { id: 'testimonials', label: 'Testimonials' },
   { id: 'contact', label: 'Contact' },
 ];
@@ -199,6 +199,39 @@ function Features() {
   );
 }
 
+function Testimonials() {
+  return (
+    <Box id="testimonials" sx={{ py: 10, bgcolor: 'background.default' }}>
+      <Container maxWidth="md">
+        <Typography variant="h3" fontWeight={700} align="center" gutterBottom data-aos="fade-up">
+          Testimonials
+        </Typography>
+        <Typography color="text.secondary" align="center" paragraph data-aos="fade-up">
+          What our users are saying
+        </Typography>
+        <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Paper sx={{ p: 3 }} data-aos="fade-up" data-aos-delay="100">
+            <Typography variant="body1" gutterBottom>
+              "Kafka UI has made managing our clusters so much easier! The interface is clean and intuitive."
+            </Typography>
+            <Typography variant="subtitle2" color="text.secondary">
+              - Jane Doe, Data Engineer
+            </Typography>
+          </Paper>
+          <Paper sx={{ p: 3 }} data-aos="fade-up" data-aos-delay="200">
+            <Typography variant="body1" gutterBottom>
+              "A must-have tool for anyone working with Kafka. The metrics dashboard is a game changer."
+            </Typography>
+            <Typography variant="subtitle2" color="text.secondary">
+              - John Smith, DevOps
+            </Typography>
+          </Paper>
+        </Box>
+      </Container>
+    </Box>
+  );
+}
+
 function CTA() {
   const navigate = useNavigate();
   return (
@@ -301,6 +334,7 @@ export default function LandingPage({ darkMode, onToggleDark, openLoginOnMount }
         <Hero />
         <About />
         <Features />
+        <Testimonials />
         <CTA />
         <Contact />
       </main>
