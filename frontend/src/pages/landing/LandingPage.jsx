@@ -6,6 +6,7 @@ import AOS from 'aos';
 import 'aos/dist/aos.css';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
+import { useAuth } from '../../contexts/AuthContext';
 
 const sections = [
   { id: 'about', label: 'About' },
@@ -21,6 +22,7 @@ function scrollToSection(id) {
 
 function Header({ darkMode, onToggleDark }) {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   return (
     <AppBar position="sticky" elevation={0} color="inherit" sx={{ backdropFilter: 'blur(8px)', py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
       <Toolbar sx={{ justifyContent: 'space-between' }}>
@@ -38,22 +40,35 @@ function Header({ darkMode, onToggleDark }) {
               {s.label}
             </Button>
           ))}
-          <Button
-            variant="outlined"
-            color="primary"
-            onClick={() => navigate('/login')}
-            sx={{ borderRadius: 2, fontWeight: 600 }}
-          >
-            Sign In
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => navigate('/signup')}
-            sx={{ borderRadius: 2, fontWeight: 600 }}
-          >
-            Sign Up
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => navigate('/dashboard')}
+              sx={{ borderRadius: 2, fontWeight: 600 }}
+            >
+              Dashboard
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => navigate('/login')}
+                sx={{ borderRadius: 2, fontWeight: 600 }}
+              >
+                Sign In
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => navigate('/signup')}
+                sx={{ borderRadius: 2, fontWeight: 600 }}
+              >
+                Sign Up
+              </Button>
+            </>
+          )}
           <IconButton onClick={onToggleDark} color="inherit" aria-label="Toggle dark mode">
             {darkMode ? <FaSun /> : <FaMoon />}
           </IconButton>
