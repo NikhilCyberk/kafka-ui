@@ -73,6 +73,7 @@ function TopicDetails() {
     const [messagesLoading, setMessagesLoading] = useState(false);
     const [produceDialogOpen, setProduceDialogOpen] = useState(false);
     const [newMessage, setNewMessage] = useState({ key: '', value: '', partition: '' });
+    const [selectedMessage, setSelectedMessage] = useState(null);
     const theme = useTheme();
 
     const fetchTopicDetails = useCallback(async () => {
@@ -222,7 +223,7 @@ function TopicDetails() {
 
                     {tabValue === 0 && <PartitionsTab partitions={details?.partitions || []} />}
                     {tabValue === 1 && <ConfigsTab configs={details?.configs || {}} />}
-                    {tabValue === 2 && <MessagesTab messages={messages} messagesLoading={messagesLoading} fetchMessages={fetchMessages} />}
+                    {tabValue === 2 && <MessagesTab messages={messages} messagesLoading={messagesLoading} fetchMessages={fetchMessages} onShowFullMessage={setSelectedMessage} />}
                 </CardContent>
             </Card>
 
@@ -287,6 +288,18 @@ function TopicDetails() {
                     <Button onClick={handleProduceMessage} variant="contained">
                         Produce
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!selectedMessage} onClose={() => setSelectedMessage(null)} maxWidth="md" fullWidth>
+                <DialogTitle>Full Message Value</DialogTitle>
+                <DialogContent>
+                    <Box component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: '1rem' }}>
+                        {selectedMessage}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSelectedMessage(null)}>Close</Button>
                 </DialogActions>
             </Dialog>
         </Container>
@@ -392,7 +405,7 @@ function ConfigsTab({ configs }) {
     );
 }
 
-function MessagesTab({ messages, messagesLoading, fetchMessages }) {
+function MessagesTab({ messages, messagesLoading, fetchMessages, onShowFullMessage }) {
     const { enqueueSnackbar } = useSnackbar();
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -521,7 +534,14 @@ function MessagesTab({ messages, messagesLoading, fetchMessages }) {
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                         whiteSpace: 'nowrap',
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.2s',
+                                                        '&:hover': {
+                                                            backgroundColor: theme.palette.action.hover,
+                                                        },
                                                     }}
+                                                    onClick={() => onShowFullMessage(msg.value)}
+                                                    title="Click to view full message"
                                                 >
                                                     {msg.value}
                                                 </Box>
