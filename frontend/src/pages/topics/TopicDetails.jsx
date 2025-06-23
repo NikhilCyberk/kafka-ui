@@ -136,13 +136,15 @@ function TopicDetails() {
 
     const handleProduceMessage = async () => {
         try {
-            const partition = newMessage.partition ? parseInt(newMessage.partition) : undefined;
+            let partition = undefined;
+            if (newMessage.partition !== "") {
+                partition = Number(newMessage.partition);
+            }
             await api.message.produceMessage(clusterName, topicName, {
                 key: newMessage.key,
                 value: newMessage.value,
                 partition
             });
-            
             enqueueSnackbar('Message produced successfully!', { variant: 'success' });
             setProduceDialogOpen(false);
             setNewMessage({ key: '', value: '', partition: '' });
@@ -215,14 +217,12 @@ function TopicDetails() {
                             <Tab label="Partitions" />
                             <Tab label="Configuration" />
                             <Tab label="Messages" />
-                            <Tab label="Produce" />
                         </Tabs>
                     </Box>
 
                     {tabValue === 0 && <PartitionsTab partitions={details?.partitions || []} />}
                     {tabValue === 1 && <ConfigsTab configs={details?.configs || {}} />}
                     {tabValue === 2 && <MessagesTab messages={messages} messagesLoading={messagesLoading} fetchMessages={fetchMessages} />}
-                    {tabValue === 3 && <ProduceTab partitions={details?.partitions || []} />}
                 </CardContent>
             </Card>
 
@@ -264,15 +264,23 @@ function TopicDetails() {
                         multiline
                         rows={3}
                     />
-                    <TextField
-                        fullWidth
-                        label="Partition (optional)"
-                        value={newMessage.partition}
-                        onChange={(e) => setNewMessage({ ...newMessage, partition: e.target.value })}
-                        margin="normal"
-                        type="number"
-                        helperText="Leave empty for automatic partition assignment"
-                    />
+                    <FormControl fullWidth margin="normal">
+                        <InputLabel id="partition-select-label">Partition (optional)</InputLabel>
+                        <Select
+                            labelId="partition-select-label"
+                            value={newMessage.partition}
+                            label="Partition (optional)"
+                            onChange={(e) => setNewMessage({ ...newMessage, partition: e.target.value })}
+                        >
+                            <MenuItem value="">Auto (Round-Robin)</MenuItem>
+                            {details?.partitions?.map((p) => (
+                                <MenuItem key={p.id} value={p.id}>{p.id}</MenuItem>
+                            ))}
+                        </Select>
+                        <Typography variant="caption" color="text.secondary">
+                            Leave empty for automatic partition assignment
+                        </Typography>
+                    </FormControl>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setProduceDialogOpen(false)}>Cancel</Button>
@@ -389,6 +397,7 @@ function MessagesTab({ messages, messagesLoading, fetchMessages }) {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [searchTerm, setSearchTerm] = useState("");
+    const theme = useTheme();
 
     const handleSearchChange = (event) => {
         setSearchTerm(event.target.value);
@@ -484,7 +493,8 @@ function MessagesTab({ messages, messagesLoading, fetchMessages }) {
                                                         margin: 0,
                                                         fontSize: '0.75rem',
                                                         fontFamily: 'monospace',
-                                                        backgroundColor: 'grey.100',
+                                                        backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100],
+                                                        color: theme.palette.text.primary,
                                                         padding: 1,
                                                         borderRadius: 1,
                                                         maxWidth: 200,
@@ -503,7 +513,8 @@ function MessagesTab({ messages, messagesLoading, fetchMessages }) {
                                                         margin: 0,
                                                         fontSize: '0.75rem',
                                                         fontFamily: 'monospace',
-                                                        backgroundColor: 'grey.100',
+                                                        backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100],
+                                                        color: theme.palette.text.primary,
                                                         padding: 1,
                                                         borderRadius: 1,
                                                         maxWidth: 300,
@@ -542,112 +553,6 @@ function MessagesTab({ messages, messagesLoading, fetchMessages }) {
                     )}
                 </TableContainer>
             )}
-        </Box>
-    );
-}
-
-function ProduceTab({ partitions }) {
-    const { clusterName, topicName } = useParams();
-    const { enqueueSnackbar } = useSnackbar();
-    const [key, setKey] = useState("");
-    const [value, setValue] = useState("");
-    const [partition, setPartition] = useState(-1);
-    const [isProducing, setIsProducing] = useState(false);
-
-    const handleProduceMessage = async (e) => {
-        e.preventDefault();
-        setIsProducing(true);
-
-        const payload = {
-            key: key,
-            value: value,
-            partition: partition === -1 ? null : partition,
-        };
-
-        try {
-            const response = await fetch(
-                `/api/clusters/${clusterName}/topics/${topicName}/messages`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                }
-            );
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to produce message");
-            }
-            enqueueSnackbar("Message produced successfully!", { variant: "success" });
-            setKey("");
-            setValue("");
-        } catch (err) {
-            enqueueSnackbar(`Error: ${err.message}`, { variant: "error" });
-        } finally {
-            setIsProducing(false);
-        }
-    };
-
-    return (
-        <Box
-            component="form"
-            onSubmit={handleProduceMessage}
-            noValidate
-            sx={{ mt: 1 }}
-        >
-            <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                    <TextField
-                        select
-                        label="Partition"
-                        value={partition}
-                        onChange={(e) => setPartition(Number(e.target.value))}
-                        fullWidth
-                    >
-                        <MenuItem value={-1}>Auto (Round-Robin)</MenuItem>
-                        {partitions.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                                {p.id}
-                            </MenuItem>
-                        ))}
-                    </TextField>
-                </Grid>
-                <Grid item xs={12} sm={8}>
-                    <TextField
-                        fullWidth
-                        label="Key"
-                        value={key}
-                        onChange={(e) => setKey(e.target.value)}
-                    />
-                </Grid>
-                <Grid item xs={12}>
-                    <TextField
-                        fullWidth
-                        label="Value"
-                        multiline
-                        rows={6}
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder="Enter message value..."
-                    />
-                </Grid>
-            </Grid>
-            <Box sx={{ mt: 2, position: "relative" }}>
-                <Button type="submit" variant="contained" disabled={isProducing}>
-                    Produce Message
-                </Button>
-                {isProducing && (
-                    <CircularProgress
-                        size={24}
-                        sx={{
-                            position: "absolute",
-                            top: "50%",
-                            left: "50%",
-                            marginTop: "-12px",
-                            marginLeft: "-12px",
-                        }}
-                    />
-                )}
-            </Box>
         </Box>
     );
 }
