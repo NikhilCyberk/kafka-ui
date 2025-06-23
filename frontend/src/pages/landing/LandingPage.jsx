@@ -7,6 +7,9 @@ import 'aos/dist/aos.css';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../contexts/AuthContext';
+import Modal from '../../components/common/Modal';
+import Login from '../auth/Login';
+import Signup from '../auth/Signup';
 
 const sections = [
   { id: 'about', label: 'About' },
@@ -20,8 +23,7 @@ function scrollToSection(id) {
   if (el) el.scrollIntoView({ behavior: 'smooth' });
 }
 
-function Header({ darkMode, onToggleDark }) {
-  const navigate = useNavigate();
+function Header({ darkMode, onToggleDark, onOpenLogin, onOpenSignup }) {
   const { isAuthenticated } = useAuth();
   return (
     <AppBar position="sticky" elevation={0} color="inherit" sx={{ backdropFilter: 'blur(8px)', py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -44,7 +46,7 @@ function Header({ darkMode, onToggleDark }) {
             <Button
               variant="contained"
               color="primary"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => window.location.href = '/dashboard'}
               sx={{ borderRadius: 2, fontWeight: 600 }}
             >
               Dashboard
@@ -54,7 +56,7 @@ function Header({ darkMode, onToggleDark }) {
               <Button
                 variant="outlined"
                 color="primary"
-                onClick={() => navigate('/login')}
+                onClick={onOpenLogin}
                 sx={{ borderRadius: 2, fontWeight: 600 }}
               >
                 Sign In
@@ -62,7 +64,7 @@ function Header({ darkMode, onToggleDark }) {
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() => navigate('/signup')}
+                onClick={onOpenSignup}
                 sx={{ borderRadius: 2, fontWeight: 600 }}
               >
                 Sign Up
@@ -271,10 +273,30 @@ function Footer() {
   );
 }
 
-export default function LandingPage({ darkMode, onToggleDark }) {
+export default function LandingPage({ darkMode, onToggleDark, openLoginOnMount }) {
+  const [loginOpen, setLoginOpen] = React.useState(false);
+  const [signupOpen, setSignupOpen] = React.useState(false);
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (openLoginOnMount) {
+      setLoginOpen(true);
+    }
+  }, [openLoginOnMount]);
+
+  const handleLoginSuccess = () => {
+    setLoginOpen(false);
+    navigate('/dashboard');
+  };
+
   return (
     <Box>
-      <Header darkMode={darkMode} onToggleDark={onToggleDark} />
+      <Header
+        darkMode={darkMode}
+        onToggleDark={onToggleDark}
+        onOpenLogin={() => setLoginOpen(true)}
+        onOpenSignup={() => setSignupOpen(true)}
+      />
       <main>
         <Hero />
         <About />
@@ -283,6 +305,20 @@ export default function LandingPage({ darkMode, onToggleDark }) {
         <Contact />
       </main>
       <Footer />
+      <Modal open={loginOpen} onClose={() => setLoginOpen(false)} title="Sign In" maxWidth="xs">
+        <Login 
+          onSuccess={handleLoginSuccess} 
+          inModal={true} 
+          switchToSignup={() => { setLoginOpen(false); setSignupOpen(true); }}
+        />
+      </Modal>
+      <Modal open={signupOpen} onClose={() => setSignupOpen(false)} title="Sign Up" maxWidth="xs">
+        <Signup 
+          onSuccess={() => setSignupOpen(false)} 
+          inModal={true} 
+          switchToLogin={() => { setSignupOpen(false); setLoginOpen(true); }}
+        />
+      </Modal>
     </Box>
   );
 } 

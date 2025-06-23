@@ -21,8 +21,8 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    // Redirect to login page with the return url
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Redirect to landing page and show login modal
+    return <Navigate to="/" state={{ showLogin: true, from: location }} replace />;
   }
 
   return children;

@@ -17,7 +17,7 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../../contexts/AuthContext';
 
-const Signup = () => {
+const Signup = ({ onSuccess, inModal, switchToLogin }) => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -50,7 +50,11 @@ const Signup = () => {
       const result = await signup(formData.username, formData.email, formData.password);
       if (result.success) {
         enqueueSnackbar('Account created successfully!', { variant: 'success' });
-        navigate('/dashboard');
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         setError(result.error);
       }
@@ -62,6 +66,128 @@ const Signup = () => {
     }
   };
 
+  const content = (
+    <Box sx={{ p: inModal ? 0 : 2, width: inModal ? 1 : undefined }}>
+      <Box textAlign="center" mb={2}>
+        <Typography variant="h5" component="h1" gutterBottom fontWeight={700}>
+          Create Account
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 14 }}>
+          Sign up for your Kafka UI account
+        </Typography>
+      </Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 1.5, fontSize: 13 }}>
+          {error}
+        </Alert>
+      )}
+      <Box component="form" onSubmit={handleSubmit}>
+        <TextField
+          fullWidth
+          label="Username"
+          name="username"
+          value={formData.username}
+          onChange={handleChange}
+          margin="dense"
+          required
+          autoFocus
+          sx={{ mb: 1.5, fontSize: 14, '& .MuiInputBase-input': { py: 1 } }}
+        />
+        <TextField
+          fullWidth
+          label="Email"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange}
+          margin="dense"
+          required
+          sx={{ mb: 1.5, fontSize: 14, '& .MuiInputBase-input': { py: 1 } }}
+        />
+        <TextField
+          fullWidth
+          label="Password"
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          value={formData.password}
+          onChange={handleChange}
+          margin="dense"
+          required
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => setShowPassword(!showPassword)}
+                  edge="end"
+                  size="small"
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 1.5, fontSize: 14, '& .MuiInputBase-input': { py: 1 } }}
+        />
+        <TextField
+          fullWidth
+          label="Confirm Password"
+          name="confirmPassword"
+          type={showConfirmPassword ? 'text' : 'password'}
+          value={formData.confirmPassword}
+          onChange={handleChange}
+          margin="dense"
+          required
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  edge="end"
+                  size="small"
+                >
+                  {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2, fontSize: 14, '& .MuiInputBase-input': { py: 1 } }}
+        />
+        <Button
+          type="submit"
+          fullWidth
+          variant="contained"
+          color="primary"
+          size="medium"
+          disabled={loading || !formData.username || !formData.email || !formData.password || !formData.confirmPassword}
+          startIcon={loading ? <CircularProgress size={18} /> : <FaUserPlus />}
+          sx={{
+            borderRadius: 2,
+            py: 1,
+            mb: 1.5,
+            fontWeight: 600,
+            fontSize: 15,
+          }}
+        >
+          {loading ? 'Creating Account...' : 'Create Account'}
+        </Button>
+        <Box textAlign="center">
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+            Already have an account?{' '}
+            {inModal && switchToLogin ? (
+              <Link component="button" onClick={e => { e.preventDefault(); switchToLogin(); }} sx={{ fontWeight: 600, fontSize: 13 }}>
+                Sign in
+              </Link>
+            ) : (
+              <Link component={RouterLink} to="/login" sx={{ fontWeight: 600, fontSize: 13 }}>
+                Sign in
+              </Link>
+            )}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+  if (inModal) return content;
   return (
     <Box
       sx={{
@@ -69,7 +195,7 @@ const Signup = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        bgcolor: 'background.default',
         p: 2
       }}
     >
@@ -77,131 +203,11 @@ const Signup = () => {
         sx={{
           maxWidth: 400,
           width: '100%',
-          borderRadius: 3,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255,255,255,0.2)'
+          borderRadius: 2,
+          boxShadow: 1,
         }}
       >
-        <CardContent sx={{ p: 4 }}>
-          <Box textAlign="center" mb={3}>
-            <Typography variant="h4" component="h1" gutterBottom fontWeight={700}>
-              Create Account
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Sign up for your Kafka UI account
-            </Typography>
-          </Box>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-
-          <Box component="form" onSubmit={handleSubmit}>
-            <TextField
-              fullWidth
-              label="Username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              margin="normal"
-              required
-              autoFocus
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              margin="normal"
-              required
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="Password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={handleChange}
-              margin="normal"
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
-                      {showPassword ? <FaEyeSlash /> : <FaEye />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="Confirm Password"
-              name="confirmPassword"
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              margin="normal"
-              required
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      edge="end"
-                    >
-                      {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ mb: 3 }}
-            />
-
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              disabled={loading || !formData.username || !formData.email || !formData.password || !formData.confirmPassword}
-              startIcon={loading ? <CircularProgress size={20} /> : <FaUserPlus />}
-              sx={{
-                borderRadius: 2,
-                py: 1.5,
-                mb: 2,
-                background: 'linear-gradient(45deg, #667eea 30%, #764ba2 90%)',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #5a6fd8 30%, #6a4190 90%)',
-                }
-              }}
-            >
-              {loading ? 'Creating Account...' : 'Create Account'}
-            </Button>
-
-            <Box textAlign="center">
-              <Typography variant="body2" color="text.secondary">
-                Already have an account?{' '}
-                <Link component={RouterLink} to="/login" sx={{ fontWeight: 600 }}>
-                  Sign in
-                </Link>
-              </Typography>
-            </Box>
-          </Box>
-        </CardContent>
+        {content}
       </Card>
     </Box>
   );

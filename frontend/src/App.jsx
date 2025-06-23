@@ -39,7 +39,7 @@ export default function App({ darkMode, onToggleDark }) {
   return (
         <Routes>
             {/* Public routes */}
-            <Route path="/" element={<LandingPage darkMode={darkMode} onToggleDark={onToggleDark} />} />
+            <Route path="/" element={<LandingPage darkMode={darkMode} onToggleDark={onToggleDark} openLoginOnMount={location.state?.showLogin} />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             

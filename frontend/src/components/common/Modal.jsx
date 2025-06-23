@@ -22,6 +22,9 @@ const StyledDialog = styled(Dialog)(({ theme }) => ({
       ? '0 8px 32px rgba(0,0,0,0.08)'
       : '0 25px 50px rgba(0, 0, 0, 0.5)',
     maxWidth: '90vw',
+    minWidth: 320,
+    width: '100%',
+    maxWidth: 380,
     maxHeight: '90vh',
   },
   '& .MuiBackdrop-root': {
@@ -45,7 +48,7 @@ const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
 }));
 
 const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
-  padding: theme.spacing(3),
+  padding: theme.spacing(2),
   '&::-webkit-scrollbar': {
     width: '8px',
   },
@@ -75,8 +78,8 @@ const Modal = ({
   title,
   children,
   actions,
-  maxWidth = 'md',
-  fullWidth = true,
+  maxWidth = 'xs',
+  fullWidth = false,
   showCloseButton = true,
   ...props
 }) => {

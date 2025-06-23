@@ -125,7 +125,7 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
 
     const handleLogout = () => {
         logout();
-        navigate('/login');
+        navigate('/', { state: { showLogin: true } });
         handleUserMenuClose();
     };
 
