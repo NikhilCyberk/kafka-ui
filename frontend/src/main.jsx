@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { SnackbarProvider } from 'notistack';
 import '@fontsource/inter/400.css';
@@ -16,6 +16,7 @@ import App from './App.jsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { ClusterProvider } from './contexts/ClusterContext';
 import './index.css';
+import { getTheme } from './theme.js';
 
 // Initialize AOS
 AOS.init({
@@ -34,20 +35,7 @@ function Main() {
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
   }, [darkMode]);
 
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? 'dark' : 'light',
-      primary: {
-        main: '#667eea',
-      },
-      secondary: {
-        main: '#764ba2',
-      },
-    },
-    typography: {
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    },
-  });
+  const theme = getTheme(darkMode ? 'dark' : 'light');
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);

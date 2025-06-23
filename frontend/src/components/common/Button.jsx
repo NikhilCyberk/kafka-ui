@@ -48,7 +48,7 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
       ...baseStyles,
       ...sizeStyles[size || 'medium'],
       background: `linear-gradient(135deg, ${theme.palette[color].main} 0%, ${theme.palette[color].light} 100%)`,
-      color: theme.palette.common.white,
+      color: theme.palette.getContrastText(theme.palette[color].main),
       border: 'none',
       boxShadow: `0 4px 12px ${theme.palette[color].main}30`,
       '&:hover': {
@@ -61,8 +61,8 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
         boxShadow: `0 2px 8px ${theme.palette[color].main}30`,
       },
       '&:disabled': {
-        background: 'rgba(255, 255, 255, 0.1)',
-        color: 'rgba(255, 255, 255, 0.3)',
+        background: theme.palette.action.disabledBackground,
+        color: theme.palette.action.disabled,
         boxShadow: 'none',
         transform: 'none',
       },
@@ -77,7 +77,7 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
       color: theme.palette[color].main,
       border: `2px solid ${theme.palette[color].main}40`,
       '&:hover': {
-        background: `${theme.palette[color].main}10`,
+        background: theme.palette.action.hover,
         border: `2px solid ${theme.palette[color].main}`,
         transform: 'translateY(-1px)',
         boxShadow: `0 4px 12px ${theme.palette[color].main}20`,
@@ -86,8 +86,8 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
         transform: 'translateY(0)',
       },
       '&:disabled': {
-        border: '2px solid rgba(255, 255, 255, 0.1)',
-        color: 'rgba(255, 255, 255, 0.3)',
+        border: `2px solid ${theme.palette.action.disabledBackground}`,
+        color: theme.palette.action.disabled,
         transform: 'none',
         boxShadow: 'none',
       },
@@ -102,14 +102,14 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
       color: theme.palette[color].main,
       border: 'none',
       '&:hover': {
-        background: `${theme.palette[color].main}10`,
+        background: theme.palette.action.hover,
         transform: 'translateY(-1px)',
       },
       '&:active': {
         transform: 'translateY(0)',
       },
       '&:disabled': {
-        color: 'rgba(255, 255, 255, 0.3)',
+        color: theme.palette.action.disabled,
         transform: 'none',
       },
     };
@@ -119,22 +119,22 @@ const StyledButton = styled(MuiButton)(({ theme, variant, size, color = 'primary
   return {
     ...baseStyles,
     ...sizeStyles[size || 'medium'],
-    background: 'rgba(255, 255, 255, 0.05)',
+    background: theme.palette.background.paper,
     color: theme.palette.text.primary,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    border: `1px solid ${theme.palette.divider}`,
     '&:hover': {
-      background: 'rgba(255, 255, 255, 0.1)',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
+      background: theme.palette.action.hover,
+      border: `1px solid ${theme.palette.divider}`,
       transform: 'translateY(-1px)',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
     },
     '&:active': {
       transform: 'translateY(0)',
     },
     '&:disabled': {
-      background: 'rgba(255, 255, 255, 0.02)',
-      color: 'rgba(255, 255, 255, 0.3)',
-      border: '1px solid rgba(255, 255, 255, 0.05)',
+      background: theme.palette.action.disabledBackground,
+      color: theme.palette.action.disabled,
+      border: `1px solid ${theme.palette.action.disabledBackground}`,
       transform: 'none',
       boxShadow: 'none',
     },

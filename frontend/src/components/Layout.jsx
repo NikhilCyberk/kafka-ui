@@ -39,15 +39,15 @@ const StyledDrawer = styled(Drawer)(({ theme }) => ({
   '& .MuiDrawer-paper': {
     width: drawerWidth,
     boxSizing: 'border-box',
-    background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
-    borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+    background: theme.palette.background.default,
+    borderRight: `1px solid ${theme.palette.divider}`,
   },
 }));
 
 const StyledAppBar = styled(AppBar)(({ theme, open }) => ({
-  background: 'rgba(15, 23, 42, 0.8)',
+  background: theme.palette.background.paper,
   backdropFilter: 'blur(20px)',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+  borderBottom: `1px solid ${theme.palette.divider}`,
   zIndex: theme.zIndex.drawer + 1,
   transition: theme.transitions.create(['width', 'margin'], {
     easing: theme.transitions.easing.sharp,
@@ -153,11 +153,11 @@ function Layout({ children }) {
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <Box sx={{ p: 3, borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+      <Box sx={{ p: 3, borderBottom: `1px solid ${theme.palette.divider}` }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar
             sx={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.light} 100%)`,
               width: 40,
               height: 40,
             }}
@@ -172,7 +172,7 @@ function Layout({ children }) {
               label="v2.0"
               size="small"
               sx={{
-                background: 'rgba(99, 102, 241, 0.1)',
+                background: theme.palette.mode === 'light' ? theme.palette.primary.light + '22' : 'rgba(99, 102, 241, 0.1)',
                 color: 'primary.main',
                 fontSize: '0.75rem',
                 height: 20,
@@ -209,7 +209,7 @@ function Layout({ children }) {
       </Box>
 
       {/* Footer */}
-      <Box sx={{ p: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+      <Box sx={{ p: 3, borderTop: `1px solid ${theme.palette.divider}` }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center' }}>
           Modern Kafka Management
         </Typography>
@@ -239,9 +239,9 @@ function Layout({ children }) {
             color="success"
             size="small"
             sx={{ 
-              background: 'rgba(16, 185, 129, 0.1)',
+              background: theme.palette.mode === 'light' ? theme.palette.success.light + '22' : 'rgba(16, 185, 129, 0.1)',
               color: 'success.main',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              border: `1px solid ${theme.palette.success.main}33`,
             }}
           />
         </Toolbar>

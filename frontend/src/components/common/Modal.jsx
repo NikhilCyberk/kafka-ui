@@ -14,23 +14,29 @@ import { styled } from '@mui/material/styles';
 
 const StyledDialog = styled(Dialog)(({ theme }) => ({
   '& .MuiDialog-paper': {
-    background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
+    background: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.divider}`,
     borderRadius: 20,
     backdropFilter: 'blur(20px)',
-    boxShadow: '0 25px 50px rgba(0, 0, 0, 0.5)',
+    boxShadow: theme.palette.mode === 'light'
+      ? '0 8px 32px rgba(0,0,0,0.08)'
+      : '0 25px 50px rgba(0, 0, 0, 0.5)',
     maxWidth: '90vw',
     maxHeight: '90vh',
   },
   '& .MuiBackdrop-root': {
-    background: 'rgba(0, 0, 0, 0.7)',
+    background: theme.palette.mode === 'light'
+      ? 'rgba(0,0,0,0.12)'
+      : 'rgba(0, 0, 0, 0.7)',
     backdropFilter: 'blur(8px)',
   },
 }));
 
 const StyledDialogTitle = styled(DialogTitle)(({ theme }) => ({
-  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(129, 140, 248, 0.05) 100%)',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+  background: theme.palette.mode === 'light'
+    ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(66, 165, 245, 0.03) 100%)'
+    : 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(129, 140, 248, 0.05) 100%)',
+  borderBottom: `1px solid ${theme.palette.divider}`,
   padding: theme.spacing(3),
   '& .MuiTypography-root': {
     fontWeight: 600,
@@ -44,21 +50,21 @@ const StyledDialogContent = styled(DialogContent)(({ theme }) => ({
     width: '8px',
   },
   '&::-webkit-scrollbar-track': {
-    background: 'rgba(255, 255, 255, 0.05)',
+    background: theme.palette.background.default,
     borderRadius: '4px',
   },
   '&::-webkit-scrollbar-thumb': {
-    background: 'rgba(255, 255, 255, 0.2)',
+    background: theme.palette.action.hover,
     borderRadius: '4px',
   },
   '&::-webkit-scrollbar-thumb:hover': {
-    background: 'rgba(255, 255, 255, 0.3)',
+    background: theme.palette.action.selected,
   },
 }));
 
 const StyledDialogActions = styled(DialogActions)(({ theme }) => ({
-  background: 'rgba(15, 23, 42, 0.5)',
-  borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+  background: theme.palette.background.default,
+  borderTop: `1px solid ${theme.palette.divider}`,
   padding: theme.spacing(2, 3),
   gap: theme.spacing(1),
 }));

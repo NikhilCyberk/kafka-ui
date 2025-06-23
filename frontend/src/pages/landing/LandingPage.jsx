@@ -1,10 +1,11 @@
 import React from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Container, Box, Button, Grid, Paper } from '@mui/material';
+import { AppBar, Toolbar, IconButton, Typography, Container, Box, Button, Grid, Paper, TextField } from '@mui/material';
 import { FaFeather, FaMoon, FaSun } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@mui/material/styles';
 
 const sections = [
   { id: 'about', label: 'About' },
@@ -205,6 +206,7 @@ function CTA() {
 }
 
 function Contact() {
+  const theme = useTheme();
   return (
     <Box id="contact" sx={{ py: 10 }}>
       <Container maxWidth="sm">
@@ -220,8 +222,21 @@ function Contact() {
           data-aos="fade-up"
           data-aos-delay="100"
         >
-          <input type="email" placeholder="Your Email" style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }} />
-          <textarea placeholder="Your Message" rows={4} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc' }} />
+          <TextField
+            type="email"
+            placeholder="Your Email"
+            variant="outlined"
+            fullWidth
+            InputProps={{ style: { borderRadius: 8 } }}
+          />
+          <TextField
+            placeholder="Your Message"
+            variant="outlined"
+            fullWidth
+            multiline
+            minRows={4}
+            InputProps={{ style: { borderRadius: 8 } }}
+          />
           <Button variant="contained" size="large">
             Send Message
           </Button>

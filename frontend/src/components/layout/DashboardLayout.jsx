@@ -10,6 +10,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import { useCluster } from '../../contexts/ClusterContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '@mui/material/styles';
 
 const drawerWidth = 220;
 
@@ -102,6 +103,7 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
     const { clusters, selectedCluster, changeCluster, loading } = useCluster();
     const { user, logout } = useAuth();
     const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+    const theme = useTheme();
 
     const handleClusterChange = (newCluster) => {
         if (newCluster) {
@@ -171,7 +173,11 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
                         Manage
                     </Button>
                     <IconButton onClick={onToggleDark} color="inherit">
-                        {darkMode ? <FaSun /> : <FaMoon />}
+                        {darkMode ? (
+                          <FaSun style={{ color: theme.palette.warning.main }} />
+                        ) : (
+                          <FaMoon style={{ color: theme.palette.grey[700] }} />
+                        )}
                     </IconButton>
 
                     {/* User Menu */}
