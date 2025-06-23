@@ -12,6 +12,7 @@ import { Clear } from '@mui/icons-material';
 import SentimentDissatisfiedIcon from '@mui/icons-material/SentimentDissatisfied';
 import { FaPlus, FaTrash, FaEye } from 'react-icons/fa';
 import api from '../../services/api';
+import { useTheme } from '@mui/material/styles';
 
 // Standardized table styles
 const tableStyles = {
@@ -56,10 +57,6 @@ const tableStyles = {
     borderColor: 'divider',
     padding: '12px 16px',
     fontSize: '0.875rem',
-    '&:first-of-type': {
-      fontWeight: 600,
-      backgroundColor: 'grey.50',
-    },
   },
 };
 
@@ -76,6 +73,7 @@ function TopicDetails() {
     const [messagesLoading, setMessagesLoading] = useState(false);
     const [produceDialogOpen, setProduceDialogOpen] = useState(false);
     const [newMessage, setNewMessage] = useState({ key: '', value: '', partition: '' });
+    const theme = useTheme();
 
     const fetchTopicDetails = useCallback(async () => {
         if (!clusterName || !topicName) return;
@@ -334,7 +332,7 @@ function PartitionsTab({ partitions }) {
 
 function ConfigsTab({ configs }) {
     const configEntries = Object.entries(configs);
-    
+    const theme = useTheme();
     return (
         <Box>
             {configEntries.length === 0 ? (
@@ -357,10 +355,23 @@ function ConfigsTab({ configs }) {
                         <TableBody>
                             {configEntries.map(([key, value]) => (
                                 <TableRow key={key} sx={tableStyles.configTableRow}>
-                                    <TableCell sx={tableStyles.configTableCell}>
+                                    <TableCell
+                                        sx={{
+                                            ...tableStyles.configTableCell,
+                                            fontWeight: 600,
+                                            backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[50],
+                                            color: theme.palette.text.primary,
+                                        }}
+                                    >
                                         {key}
                                     </TableCell>
-                                    <TableCell sx={tableStyles.configTableCell}>
+                                    <TableCell
+                                        sx={{
+                                            ...tableStyles.configTableCell,
+                                            color: theme.palette.text.primary,
+                                            backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.default : undefined,
+                                        }}
+                                    >
                                         {value}
                                     </TableCell>
                                 </TableRow>
