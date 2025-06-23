@@ -11,6 +11,8 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import { useCluster } from '../../contexts/ClusterContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '@mui/material/styles';
+import Modal from '../../components/common/Modal';
+import Profile from '../../pages/auth/Profile';
 
 const drawerWidth = 220;
 
@@ -104,6 +106,7 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
     const { user, logout } = useAuth();
     const [userMenuAnchor, setUserMenuAnchor] = useState(null);
     const theme = useTheme();
+    const [profileOpen, setProfileOpen] = useState(false);
 
     const handleClusterChange = (newCluster) => {
         if (newCluster) {
@@ -211,7 +214,7 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
                                 </Typography>
                             </Box>
                         </MenuItemComponent>
-                        <MenuItemComponent onClick={() => { navigate('/dashboard/profile'); handleUserMenuClose(); }}>
+                        <MenuItemComponent onClick={() => { setProfileOpen(true); handleUserMenuClose(); }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <FaUser />
                                 <Typography variant="body2">Profile</Typography>
@@ -225,6 +228,10 @@ function Header({ darkMode, onToggleDark, onOpenManager }) {
                             </Box>
                         </MenuItemComponent>
                     </Menu>
+
+                    <Modal open={profileOpen} onClose={() => setProfileOpen(false)} title="Profile" maxWidth="sm">
+                      <Profile />
+                    </Modal>
 
                     <Button
                         variant="outlined"
