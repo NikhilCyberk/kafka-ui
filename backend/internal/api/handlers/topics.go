@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nikhilgoenkatech/kafka-ui/internal/constants"
 	"github.com/nikhilgoenkatech/kafka-ui/internal/kafka"
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
@@ -24,11 +25,11 @@ func (h *TopicHandler) GetTopics(c *gin.Context) {
 	clusterName := c.Param("clusterName")
 	topics, err := h.service.GetTopics(c.Request.Context(), clusterName)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to get topics: "+err.Error()))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToGetTopics+err.Error()))
 		return
 	}
 
-	utils.SendSuccess(c, topics, "Topics retrieved successfully")
+	utils.SendSuccess(c, topics, constants.MsgTopicsRetrievedSuccessfully)
 }
 
 // GetTopicDetails handles GET requests to /api/clusters/:clusterName/topics/:topicName
@@ -38,11 +39,11 @@ func (h *TopicHandler) GetTopicDetails(c *gin.Context) {
 
 	details, err := h.service.GetTopicDetails(c.Request.Context(), clusterName, topicName)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to get topic details: "+err.Error()))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToGetTopicDetails+err.Error()))
 		return
 	}
 
-	utils.SendSuccess(c, details, "Topic details retrieved successfully")
+	utils.SendSuccess(c, details, constants.MsgTopicDetailsRetrievedSuccessfully)
 }
 
 // CreateTopic handles POST requests to /api/clusters/:clusterName/topics
@@ -56,33 +57,33 @@ func (h *TopicHandler) CreateTopic(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		utils.SendError(c, errors.NewValidationError("Invalid request: "+err.Error()))
+		utils.SendError(c, errors.NewValidationError(constants.MsgInvalidRequest+err.Error()))
 		return
 	}
 
 	// Validate topic name
 	if request.Name == "" {
-		utils.SendError(c, errors.NewValidationError("Topic name is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgTopicNameRequired))
 		return
 	}
 
 	// Validate partitions and replicas
 	if request.Partitions <= 0 {
-		utils.SendError(c, errors.NewValidationError("Partitions must be greater than 0"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgPartitionsGreaterThanZero))
 		return
 	}
 	if request.Replicas <= 0 {
-		utils.SendError(c, errors.NewValidationError("Replicas must be greater than 0"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgReplicasGreaterThanZero))
 		return
 	}
 
 	err := h.service.CreateTopic(c.Request.Context(), clusterName, request.Name, int32(request.Partitions), int16(request.Replicas))
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to create topic: "+err.Error()))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToCreateTopic+err.Error()))
 		return
 	}
 
-	utils.SendSuccess(c, gin.H{"name": request.Name}, fmt.Sprintf("Topic %s created successfully", request.Name))
+	utils.SendSuccess(c, gin.H{"name": request.Name}, fmt.Sprintf(constants.MsgTopicCreatedSuccessfullyFmt, request.Name))
 }
 
 // DeleteTopic handles DELETE requests to /api/clusters/:clusterName/topics/:topicName
@@ -92,15 +93,15 @@ func (h *TopicHandler) DeleteTopic(c *gin.Context) {
 
 	// Prevent deletion of system topics
 	if topicName == "__consumer_offsets" {
-		utils.SendError(c, errors.NewValidationError("Cannot delete system topic"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgCannotDeleteSystemTopic))
 		return
 	}
 
 	err := h.service.DeleteTopic(c.Request.Context(), clusterName, topicName)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to delete topic: "+err.Error()))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToDeleteTopic+err.Error()))
 		return
 	}
 
-	utils.SendSuccess(c, gin.H{"name": topicName}, fmt.Sprintf("Topic %s deleted successfully", topicName))
+	utils.SendSuccess(c, gin.H{"name": topicName}, fmt.Sprintf(constants.MsgTopicDeletedSuccessfullyFmt, topicName))
 }

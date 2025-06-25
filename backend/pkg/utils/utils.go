@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nikhilgoenkatech/kafka-ui/internal/constants"
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
 )
 
@@ -70,15 +71,15 @@ func ParseBrokerList(brokerList string) []string {
 // ValidateBrokerList validates broker URLs
 func ValidateBrokerList(brokers []string) error {
 	if len(brokers) == 0 {
-		return errors.NewValidationError("At least one broker is required")
+		return errors.NewValidationError(constants.MsgAtLeastOneBrokerRequired)
 	}
 
 	for _, broker := range brokers {
 		if broker == "" {
-			return errors.NewValidationError("Broker URL cannot be empty")
+			return errors.NewValidationError(constants.MsgBrokerURLEmpty)
 		}
 		if !strings.Contains(broker, ":") {
-			return errors.NewValidationError("Invalid broker URL format. Expected host:port")
+			return errors.NewValidationError(constants.MsgInvalidBrokerURLFormat)
 		}
 	}
 	return nil
@@ -86,7 +87,7 @@ func ValidateBrokerList(brokers []string) error {
 
 // FormatTimestamp formats a timestamp for display
 func FormatTimestamp(timestamp time.Time) string {
-	return timestamp.Format("2006-01-02 15:04:05")
+	return timestamp.Format(constants.TimestampFormat)
 }
 
 // ParseJSON safely parses JSON data
@@ -127,7 +128,7 @@ func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	return s[:maxLen-3] + constants.TruncateEllipsis
 }
 
 // ContainsString checks if a slice contains a string

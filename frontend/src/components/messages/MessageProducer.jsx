@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { Send } from '@mui/icons-material';
 import { produceMessageWithPartition, getTopicPartitions } from '../../services/api';
+import { MESSAGE_PRODUCER } from '../../utils/constants';
 
 function MessageProducer({ topicName, onMessageSent }) {
   const [message, setMessage] = useState({
@@ -49,13 +50,13 @@ function MessageProducer({ topicName, onMessageSent }) {
       }
     } catch (error) {
       console.error('Error fetching partitions:', error);
-      setError('Failed to fetch topic partitions');
+      setError(MESSAGE_PRODUCER.ERROR_FETCH_PARTITIONS);
     }
   };
 
   const handleSendMessage = async () => {
     if (!message.value.trim()) {
-      setError('Message value is required');
+      setError(MESSAGE_PRODUCER.ERROR_MESSAGE_REQUIRED);
       return;
     }
 
@@ -71,7 +72,7 @@ function MessageProducer({ topicName, onMessageSent }) {
 
       await produceMessageWithPartition(topicName, messageData);
       
-      setSuccess('Message sent successfully!');
+      setSuccess(MESSAGE_PRODUCER.SUCCESS_MESSAGE_SENT);
       setMessage({ key: '', value: '', format: 'json' });
       
       if (onMessageSent) {
@@ -79,7 +80,7 @@ function MessageProducer({ topicName, onMessageSent }) {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      setError(error.response?.data?.error || 'Failed to send message');
+      setError(error.response?.data?.error || MESSAGE_PRODUCER.ERROR_SEND_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -115,18 +116,18 @@ function MessageProducer({ topicName, onMessageSent }) {
         <Grid item xs={12} sm={6}>
           <TextField
             fullWidth
-            label="Message Key (optional)"
+            label={MESSAGE_PRODUCER.LABEL_MESSAGE_KEY_OPTIONAL}
             value={message.key}
             onChange={(e) => setMessage(prev => ({ ...prev, key: e.target.value }))}
-            placeholder="Enter message key..."
+            placeholder={MESSAGE_PRODUCER.PLACEHOLDER_MESSAGE_KEY}
           />
         </Grid>
         <Grid item xs={12} sm={6}>
           <FormControl fullWidth>
-            <InputLabel>Message Format</InputLabel>
+            <InputLabel>{MESSAGE_PRODUCER.LABEL_MESSAGE_FORMAT}</InputLabel>
             <Select
               value={message.format}
-              label="Message Format"
+              label={MESSAGE_PRODUCER.LABEL_MESSAGE_FORMAT}
               onChange={(e) => setMessage(prev => ({ ...prev, format: e.target.value }))}
             >
               <MenuItem value="json">JSON</MenuItem>
@@ -139,14 +140,14 @@ function MessageProducer({ topicName, onMessageSent }) {
         <Grid item xs={12}>
           <TextField
             fullWidth
-            label="Message Value"
+            label={MESSAGE_PRODUCER.LABEL_MESSAGE_VALUE}
             value={message.value}
             onChange={(e) => setMessage(prev => ({ ...prev, value: e.target.value }))}
             multiline
             rows={4}
-            placeholder="Enter your message here..."
+            placeholder={MESSAGE_PRODUCER.PLACEHOLDER_MESSAGE_VALUE}
             onKeyPress={handleKeyPress}
-            helperText="Press Ctrl+Enter (or Cmd+Enter) to send"
+            helperText={MESSAGE_PRODUCER.HELPER_TEXT_SEND}
           />
         </Grid>
       </Grid>
@@ -161,17 +162,17 @@ function MessageProducer({ topicName, onMessageSent }) {
               onChange={(e) => setUseManualPartition(e.target.checked)}
             />
           }
-          label="Select specific partition"
+          label={MESSAGE_PRODUCER.LABEL_SELECT_PARTITION}
         />
       </Box>
 
       {useManualPartition && (
         <Box sx={{ mb: 2 }}>
           <FormControl fullWidth>
-            <InputLabel>Partition</InputLabel>
+            <InputLabel>{MESSAGE_PRODUCER.LABEL_PARTITION}</InputLabel>
             <Select
               value={selectedPartition}
-              label="Partition"
+              label={MESSAGE_PRODUCER.LABEL_PARTITION}
               onChange={(e) => setSelectedPartition(e.target.value)}
             >
               {partitions.map((partition) => (
@@ -192,7 +193,7 @@ function MessageProducer({ topicName, onMessageSent }) {
           disabled={loading || !message.value.trim()}
           startIcon={loading ? <CircularProgress size={20} /> : <Send />}
         >
-          {loading ? 'Sending...' : 'Send Message'}
+          {loading ? MESSAGE_PRODUCER.BUTTON_SENDING : MESSAGE_PRODUCER.BUTTON_SEND_MESSAGE}
         </Button>
       </Box>
     </Paper>

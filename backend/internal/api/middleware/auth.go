@@ -8,6 +8,8 @@ import (
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
 )
 
+// this is for testing purposes
+
 var jwtConfig = utils.JWTConfig{
 	SecretKey: "your-secret-key-change-in-production",
 	Duration:  24 * time.Hour,

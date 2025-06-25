@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/nikhilgoenkatech/kafka-ui/internal/constants"
 	"github.com/nikhilgoenkatech/kafka-ui/internal/models"
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/errors"
 	"github.com/nikhilgoenkatech/kafka-ui/pkg/utils"
@@ -13,12 +14,12 @@ import (
 )
 
 var jwtConfig = utils.JWTConfig{
-	SecretKey: "your-secret-key-change-in-production",
+	SecretKey: constants.SecretKeyDev,
 	Duration:  24 * time.Hour,
 }
 
 // Demo admin user hash (password: "admin123")
-var demoAdminHash = "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
+var demoAdminHash = constants.DemoAdminHash
 
 // Claims represents JWT claims
 type Claims struct {
@@ -31,34 +32,34 @@ type Claims struct {
 func Register(c *gin.Context) {
 	var req models.SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.SendError(c, errors.NewValidationError("Invalid request data: "+err.Error()))
+		utils.SendError(c, errors.NewValidationError(constants.MsgInvalidRequestData+err.Error()))
 		return
 	}
 
 	// Validate input
 	if req.Username == "" {
-		utils.SendError(c, errors.NewValidationError("Username is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgUsernameRequired))
 		return
 	}
 	if req.Password == "" {
-		utils.SendError(c, errors.NewValidationError("Password is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgPasswordRequired))
 		return
 	}
 	if req.Email == "" {
-		utils.SendError(c, errors.NewValidationError("Email is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgEmailRequired))
 		return
 	}
 
 	// Check if user already exists
 	if req.Username == "admin" {
-		utils.SendError(c, errors.NewConflictError("Username already exists"))
+		utils.SendError(c, errors.NewConflictError(constants.MsgUsernameExists))
 		return
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to hash password"))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToHashPassword))
 		return
 	}
 
@@ -74,7 +75,7 @@ func Register(c *gin.Context) {
 	// Generate JWT token
 	token, err := utils.GenerateJWT(jwtConfig, "1", user.Username)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to generate token"))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToGenerateToken))
 		return
 	}
 
@@ -82,14 +83,14 @@ func Register(c *gin.Context) {
 		Token:     token,
 		User:      user,
 		ExpiresAt: time.Now().Add(jwtConfig.Duration).Unix(),
-	}, "User registered successfully")
+	}, constants.MsgUserRegisteredSuccessfully)
 }
 
 // Login handles user authentication
 func Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.SendError(c, errors.NewValidationError("Invalid request data: "+err.Error()))
+		utils.SendError(c, errors.NewValidationError(constants.MsgInvalidRequestData+err.Error()))
 		return
 	}
 
@@ -97,18 +98,18 @@ func Login(c *gin.Context) {
 
 	// Validate input
 	if req.Username == "" {
-		utils.SendError(c, errors.NewValidationError("Username is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgUsernameRequired))
 		return
 	}
 	if req.Password == "" {
-		utils.SendError(c, errors.NewValidationError("Password is required"))
+		utils.SendError(c, errors.NewValidationError(constants.MsgPasswordRequired))
 		return
 	}
 
 	// In a real app, you'd fetch user from a database.
 	// For demo purposes, we'll use a hardcoded admin user.
 	if req.Username != "admin" {
-		utils.SendError(c, errors.NewUnauthorizedError("Invalid credentials"))
+		utils.SendError(c, errors.NewUnauthorizedError(constants.MsgInvalidCredentials))
 		return
 	}
 
@@ -116,7 +117,7 @@ func Login(c *gin.Context) {
 	// This bypasses the bcrypt issue to confirm the rest of the flow.
 	if req.Password != "admin123" {
 		log.Printf("Password does not match. Expected 'admin123', got '%s'", req.Password)
-		utils.SendError(c, errors.NewUnauthorizedError("Invalid credentials"))
+		utils.SendError(c, errors.NewUnauthorizedError(constants.MsgInvalidCredentials))
 		return
 	}
 	// --- END TEMPORARY LOGIN ---
@@ -133,7 +134,7 @@ func Login(c *gin.Context) {
 	// Generate JWT token
 	token, err := utils.GenerateJWT(jwtConfig, "1", user.Username)
 	if err != nil {
-		utils.SendError(c, errors.NewInternalError("Failed to generate token"))
+		utils.SendError(c, errors.NewInternalError(constants.MsgFailedToGenerateToken))
 		return
 	}
 
@@ -141,20 +142,20 @@ func Login(c *gin.Context) {
 		Token:     token,
 		User:      user,
 		ExpiresAt: time.Now().Add(jwtConfig.Duration).Unix(),
-	}, "Login successful")
+	}, constants.MsgLoginSuccessful)
 }
 
 // GetProfile returns the current user's profile
 func GetProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		utils.SendError(c, errors.NewUnauthorizedError("User ID not found in token"))
+		utils.SendError(c, errors.NewUnauthorizedError(constants.MsgUserIDNotFoundInToken))
 		return
 	}
 
 	username, exists := c.Get("username")
 	if !exists {
-		utils.SendError(c, errors.NewUnauthorizedError("Username not found in token"))
+		utils.SendError(c, errors.NewUnauthorizedError(constants.MsgUsernameNotFoundInToken))
 		return
 	}
 
@@ -162,7 +163,7 @@ func GetProfile(c *gin.Context) {
 	// In a real app, you'd fetch this from a database.
 	userIDStr, ok := userID.(string)
 	if !ok || userIDStr != "1" {
-		utils.SendError(c, errors.NewNotFoundError("User not found"))
+		utils.SendError(c, errors.NewNotFoundError(constants.MsgUserNotFound))
 		return
 	}
 
@@ -174,7 +175,7 @@ func GetProfile(c *gin.Context) {
 		UpdatedAt: time.Now(),
 	}
 
-	utils.SendSuccess(c, user, "Profile fetched successfully")
+	utils.SendSuccess(c, user, constants.MsgProfileFetchedSuccessfully)
 }
 
 // ChangePassword handles password change

@@ -3,6 +3,8 @@ package kafka
 import (
 	"context"
 	"fmt"
+
+	"github.com/nikhilgoenkatech/kafka-ui/internal/constants"
 )
 
 // BrokerService handles broker-related operations.
@@ -26,19 +28,19 @@ func (s *BrokerService) GetBrokers(ctx context.Context, clusterName string) (int
 
 	brokers, _, err := client.DescribeCluster()
 	if err != nil {
-		return nil, fmt.Errorf("failed to describe cluster %s: %w", clusterName, err)
+		return nil, fmt.Errorf(constants.ErrDescribeCluster, clusterName, err)
 	}
 
 	if len(brokers) == 0 {
-		return nil, fmt.Errorf("no brokers found for cluster %s", clusterName)
+		return nil, fmt.Errorf(constants.ErrNoBrokersFound, clusterName)
 	}
 
 	// You can enhance this to return more detailed information if needed.
 	var brokerInfo []map[string]interface{}
 	for _, b := range brokers {
 		info := make(map[string]interface{})
-		info["id"] = b.ID()
-		info["addr"] = b.Addr()
+		info[constants.BrokerIDKey] = b.ID()
+		info[constants.BrokerAddrKey] = b.Addr()
 		brokerInfo = append(brokerInfo, info)
 	}
 

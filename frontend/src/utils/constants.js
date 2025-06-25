@@ -129,4 +129,22 @@ export const SUCCESS_MESSAGES = {
   TOPIC_DELETED: 'Topic deleted successfully.',
   MESSAGE_PRODUCED: 'Message produced successfully.',
   SETTINGS_SAVED: 'Settings saved successfully.',
+};
+
+// MessageProducer string constants
+export const MESSAGE_PRODUCER = {
+  LABEL_MESSAGE_KEY_OPTIONAL: "Message Key (optional)",
+  PLACEHOLDER_MESSAGE_KEY: "Enter message key...",
+  LABEL_MESSAGE_FORMAT: "Message Format",
+  LABEL_MESSAGE_VALUE: "Message Value",
+  PLACEHOLDER_MESSAGE_VALUE: "Enter your message here...",
+  HELPER_TEXT_SEND: "Press Ctrl+Enter (or Cmd+Enter) to send",
+  LABEL_SELECT_PARTITION: "Select specific partition",
+  LABEL_PARTITION: "Partition",
+  ERROR_FETCH_PARTITIONS: "Failed to fetch topic partitions",
+  ERROR_MESSAGE_REQUIRED: "Message value is required",
+  SUCCESS_MESSAGE_SENT: "Message sent successfully!",
+  ERROR_SEND_MESSAGE: "Failed to send message",
+  BUTTON_SENDING: "Sending...",
+  BUTTON_SEND_MESSAGE: "Send Message",
 }; 
